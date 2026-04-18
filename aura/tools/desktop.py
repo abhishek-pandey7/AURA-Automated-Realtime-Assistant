@@ -66,6 +66,20 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "desktop_analyze_screen",
+            "description": "Take a screenshot of the entire desktop and provide it to the LLM to analyze UI elements visually.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {"type": "string"}
+                },
+                "required": ["reason"]
+            }
+        }
+    },
 ]
 
 def desktop_click(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
@@ -114,4 +128,27 @@ def desktop_get_position() -> str:
     except Exception as e:
         return f"[ AURA ] Failed to get mouse position: {e}"
 
+def desktop_analyze_screen(reason: str) -> str:
+    from aura.confirm import confirm_desktop
+    import base64
+    from io import BytesIO
+    from PIL import Image
+
+    if not confirm_desktop("analyze screen", reason):
+        return "[ AURA ] Action cancelled."
+    try:
+        # Take screenshot and resize to save tokens/size
+        img = pyautogui.screenshot()
+        width, height = img.size
+        # Resize to max 1024x1024 while maintaining aspect ratio
+        img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        
+        buffered = BytesIO()
+        img.save(buffered, format="JPEG", quality=85)
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+        # AURA intercepts this exact string format to inject the image object
+        return f"[ IMAGE_BASE64: data:image/jpeg;base64,{img_str} ]"
+    except Exception as e:
+        return f"[ AURA ] Screen capture failed: {e}"
 
