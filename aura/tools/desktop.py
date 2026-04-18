@@ -37,6 +37,24 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "desktop_press",
+            "description": "Press a specific hotkey or key combination.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keys": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of keys to press together (e.g. ['ctrl', 't'] or ['win'] or ['enter'])."
+                    }
+                },
+                "required": ["keys"]
+            }
+        }
+    },
 ]
 
 def desktop_click(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
@@ -64,5 +82,17 @@ def desktop_type(text: str, press_enter: bool = False) -> str:
         return f"[ AURA ] Typed text successfully."
     except Exception as e:
         return f"[ AURA ] Desktop type failed: {e}"
+
+def desktop_press(keys: list[str]) -> str:
+    import time
+    if not confirm_desktop("hotkey", " + ".join(keys)):
+        return "[ AURA ] Desktop action cancelled."
+    try:
+        pyautogui.hotkey(*keys)
+        # Give the UI time to process the keypress (like Tab focus)
+        time.sleep(0.5)
+        return f"[ AURA ] Pressed keys: {' + '.join(keys)}."
+    except Exception as e:
+        return f"[ AURA ] Desktop hotkey failed: {e}"
 
 
