@@ -22,6 +22,21 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "desktop_type",
+            "description": "Type a string using the keyboard.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Text to type."},
+                    "press_enter": {"type": "boolean", "description": "Whether to press Enter after typing."}
+                },
+                "required": ["text"]
+            }
+        }
+    },
 ]
 
 def desktop_click(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
@@ -32,5 +47,22 @@ def desktop_click(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
         return f"[ AURA ] Clicked at ({x}, {y}) {clicks} time(s) with {button} button."
     except Exception as e:
         return f"[ AURA ] Desktop click failed: {e}"
+
+def desktop_type(text: str, press_enter: bool = False) -> str:
+    import time
+    # Redact large text for the prompt
+    preview = text if len(text) < 50 else text[:47] + "..."
+    if not confirm_desktop("type", f"'{preview}' (enter={press_enter})"):
+        return "[ AURA ] Desktop action cancelled."
+    try:
+        # Wait a moment before typing to ensure the field is focused
+        time.sleep(0.5)
+        pyautogui.write(text, interval=0.02)
+        if press_enter:
+            pyautogui.press('enter')
+        time.sleep(0.5)
+        return f"[ AURA ] Typed text successfully."
+    except Exception as e:
+        return f"[ AURA ] Desktop type failed: {e}"
 
 
