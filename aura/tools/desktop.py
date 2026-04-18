@@ -55,6 +55,17 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "desktop_get_position",
+            "description": "Get the current mouse position on the screen.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
 ]
 
 def desktop_click(x: int, y: int, clicks: int = 1, button: str = "left") -> str:
@@ -94,5 +105,13 @@ def desktop_press(keys: list[str]) -> str:
         return f"[ AURA ] Pressed keys: {' + '.join(keys)}."
     except Exception as e:
         return f"[ AURA ] Desktop hotkey failed: {e}"
+
+def desktop_get_position() -> str:
+    try:
+        x, y = pyautogui.position()
+        width, height = pyautogui.size()
+        return f"[ AURA ] Mouse Position: ({x}, {y}) | Screen Size: {width}x{height}"
+    except Exception as e:
+        return f"[ AURA ] Failed to get mouse position: {e}"
 
 
