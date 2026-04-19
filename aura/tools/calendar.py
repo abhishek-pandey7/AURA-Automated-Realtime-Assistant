@@ -69,6 +69,23 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "calendar_delete_event",
+            "description": "Delete an event from Google Calendar by its title (deletes the next matching upcoming event).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Title of the event to delete."
+                    }
+                },
+                "required": ["title"]
+            }
+        }
+    }
 ]
 
 
@@ -189,3 +206,28 @@ def calendar_add_event(
         return f"[ AURA ] Calendar add failed: {ex}"
 
 
+def calendar_delete_event(title: str) -> str:
+    try:
+        service = _get_service()
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+
+        events_result = service.events().list(
+            calendarId="primary",
+            timeMin=now,
+            maxResults=20,
+            singleEvents=True,
+            orderBy="startTime",
+            q=title
+        ).execute()
+
+        events = events_result.get("items", [])
+        matched = [e for e in events if title.lower() in e.get("summary", "").lower()]
+
+        if not matched:
+            return f"[ AURA ] No upcoming event found with title matching '{title}'."
+
+        event = matched[0]
+        service.events().delete(calendarId="primary", eventId=event["id"]).execute()
+        return f"[ AURA ] ✓ Deleted event: '{event.get('summary')}'"
+    except Exception as ex:
+        return f"[ AURA ] Calendar delete failed: {ex}"
