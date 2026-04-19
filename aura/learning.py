@@ -79,4 +79,53 @@ class Recorder:
         except Exception:
             return ""
 
+def generate_tool_code(goal: str, events: list[str], start_img: str, end_img: str) -> str | None:
+    client = OpenAI(
+        base_url=INFERX_BASE_URL,
+        api_key=INFERX_API_KEY,
+        timeout=httpx.Timeout(timeout=180.0, connect=15.0),
+    )
+    
+    events_str = "\n".join(events)
+    prompt = f"""You are generating an autonomous AURA tool for the goal: '{goal}'.
+The user performed this task manually, and recorded their physical actions. 
+Here is their trace log:
+```
+{events_str}
+```
+
+Write ONLY a valid, self-contained Python script (NO markdown formatting or fences around the whole file, I will write it directly to .py). 
+The script must contain:
+1. An import statement for `time` and `pyautogui`.
+2. `TOOL_DEFS` which is a list dict containing the JSON function schema for this new tool (with type, function, name, description, parameters). Use a clear snake_case function name built from the goal (e.g. `check_bank_balance`).
+3. The actual Python function corresponding to `TOOL_DEFS` name, using `pyautogui` to execute the clicks/types sequentially with sensible `time.sleep()` between them.
+Add `pyautogui.FAILSAFE = True` at the start of the function.
+Ignore the 'Esc' press at the very end of the event trace as it was used to stop recording.
+Condense sequential typing of characters into simple `pyautogui.write()`.
+Do NOT enclose your output in ```python ... ```, literally output only code.
+"""
+
+    messages = [
+        {"role": "system", "content": "You are a senior python developer creating AURA tools."},
+        {"role": "user", "content": [
+            {"type": "text", "text": prompt},
+        ]}
+    ]
+    
+    if start_img:
+        messages[1]["content"].append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{start_img}"}})
+    if end_img:
+        messages[1]["content"].append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{end_img}"}})
+
+    try:
+        response = client.chat.completions.create(
+            model=INFERX_MODEL,
+            max_tokens=2048,
+            messages=messages,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        console.print(f"[bold red]Generation Error:[/bold red] {e}")
+        return None
 
