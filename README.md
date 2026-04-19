@@ -147,3 +147,16 @@ playwright install chromium      # To support browser tooling
 ```
 
 ---
+
+## 7. Configuration Details
+
+Modify your locally generated `.env` file to dictate how AURA behaves.
+
+| Variable | Description | Example Default |
+| --- | --- | --- |
+| INFERX_BASE_URL | Base URL of the endpoint | https://api.openai.com/v1 |
+| INFERX_API_KEY | Authorization API key | sk-xxx (Required) |
+| INFERX_MODEL | Targeting Model | gemma-4-31b |
+| AURA_SAFE_MODE | Demand human verification for destructive tool deployments | true |
+
+---
