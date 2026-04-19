@@ -226,3 +226,25 @@ python tests/test_endpoint.py
 ```
 
 ---
+
+## 11. Dependencies List
+
+AURA bridges multiple complex open-source libraries.
+
+| Package | Purpose | Platform |
+| --- | --- | --- |
+| **openai** | Universal mapping to standard LLM endpoints | All |
+| **rich** | Renders formatted syntax, tables, and progress indicators | All |
+| **requests** | Low level network manipulation and API access | All |
+| **beautifulsoup4** | Standardizing HTML trees | All |
+| **playwright** | Deep orchestration of WebKit and Chromium processes | All |
+| **python-dotenv** | Inject configurations to the environment safely | All |
+| **PyAutoGUI** | Abstraction of mouse and keyboard simulations | All |
+| **pynput** | Hardware hook extraction for Imitation Learning algorithms | All |
+| **Pillow** | Memory processing of visual data and screen captures | All |
+| **SpeechRecognition** | Decodes array segments to semantic strings | All |
+| **pyaudio** | Live PCM translation from active system microphones | All |
+| **pyttsx3** | Local text-to-voice synthesization | All |
+| **winsdk** | Native, ultra-low-latency OCR engine mappings | Windows |
+
+---
