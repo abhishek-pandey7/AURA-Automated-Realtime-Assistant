@@ -114,3 +114,36 @@ aura/
 ```
 
 ---
+
+## 6. Installation
+
+Provide the necessary execution credentials in a configuration file:
+```bash
+git clone https://github.com/your-username/LimitHitters_Syn3rgy_AbhishekPandey
+cd LimitHitters_Syn3rgy_AbhishekPandey
+cp .env.example .env
+```
+
+### macOS / Linux automated setup
+```bash
+bash install.sh
+source .venv/bin/activate
+aura run
+```
+
+### Windows automated setup
+```bat
+install.bat
+.venv\Scripts\activate
+aura run
+```
+
+### Manual Dependency Installation
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e .
+playwright install chromium      # To support browser tooling
+```
+
+---
