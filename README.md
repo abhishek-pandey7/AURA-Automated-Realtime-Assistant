@@ -35,3 +35,30 @@ Observation 1 passed
 ```
 
 ---
+
+## 2. Advanced Capabilities
+
+AURA goes significantly beyond shell and file manipulation. It incorporates profound systems designed for complex operating workflows:
+
+### Full-Screen Spatial Desktop Vision
+AURA does not rely purely on text matching or hardcoded coordinates. It features a complete **Desktop Vision Engine** capable of reading the entire screen layout. It generates a structured spatial map of text and UI elements. This allows AURA to:
+- Intelligently understand the visual hierarchy of an application.
+- Perform coordinate-based interaction, scrolling, and hover-based navigation on any application, even those not strictly accessible via an API.
+- Recover from aggressive bot protection or captchas by visually parsing interfaces.
+
+### Imitation Learning ("Watch and Learn")
+AURA can learn directly from your behavior. By activating Imitation Learning, AURA uses `pynput` to listen to your mouse clicks, keyboard inputs, and navigation habits. It captures these user actions and passes them to a Vision-Language Model (VLM) code generation pipeline. 
+This pipeline synthesizes your organic workflow into reusable Python macros utilizing `pyautogui`. Once generated, AURA dynamically registers these new macros at runtime, adding them permanently to its toolchain. 
+
+### Persistent Browser Automation
+AURA does not just use stateless HTML scraping. It incorporates headless and non-headless browser automation (utilizing Playwright) that integrates directly with your active Chrome profiles. This enables:
+- A deterministic navigation sequence: Launch, focus Chrome, navigate to a target URL, and interact seamlessly.
+- State persistence: Logins and cookies from your active Chrome profile allow AURA to perform tasks as an authenticated user.
+- Real-time interaction with elements like search bars, infinite scrolling feeds, and dynamically generated single-page applications.
+
+### Deep Integration Capabilities
+AURA features dedicated automation pipelines for standard office workflows:
+- **Google Meet & Calendar**: Autonomously schedule video conferences, draft meeting agendas, and dynamically email Google Meet links to intended participants.
+- **Google Forms**: Interactively fill out complex web forms relying on a secure, locally-stored user profile and historical context.
+
+---
