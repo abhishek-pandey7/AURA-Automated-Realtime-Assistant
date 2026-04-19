@@ -129,3 +129,41 @@ Do NOT enclose your output in ```python ... ```, literally output only code.
         console.print(f"[bold red]Generation Error:[/bold red] {e}")
         return None
 
+def learn_workflow(goal: str, duration: int = 60):
+    recorder = Recorder()
+    events, start_img, end_img = recorder.record(duration)
+    
+    if not events:
+        console.print("  [yellow]No input detected. Cancelling watch & learn task.[/yellow]")
+        return
+        
+    console.print("  [cyan]Generating macro script from trace...[/cyan]")
+    code = generate_tool_code(goal, events, start_img, end_img)
+    if not code:
+        return
+        
+    if code.startswith("```python"):
+        code = code.split("```python")[1]
+    if code.startswith("```"):
+        code = code.split("```", 1)[1]
+    if code.endswith("```"):
+        code = code.rsplit("```", 1)[0]
+    code = code.strip()
+    
+    match = re.search(r'def\s+([a-zA-Z0-9_]+)\(', code)
+    if not match:
+        console.print("  [red]Could not parse function name from generated code.[/red]")
+        return
+        
+    tool_name = match.group(1)
+    
+    import aura.tools
+    tools_dir = Path(aura.tools.__file__).resolve().parent
+    file_path = tools_dir / f"{tool_name}.py"
+    
+    try:
+        file_path.write_text(code, encoding="utf-8")
+        aura.tools._init_tools()
+        console.print(f"  [bold green]✓ Watch & Learn Complete![/bold green] Tool registered as '{tool_name}'.")
+    except Exception as e:
+        console.print(f"  [bold red]Failed to save tool:[/bold red] {e}")
