@@ -187,3 +187,29 @@ pipwin install pyaudio
 *Note: The native `desktop_find_text` and vision toolkit incorporates Windows native UI SDK (`winsdk`) for OCR, running exceptionally fast on Windows environments. Cross-platform counterparts substitute internal libraries as needed.*
 
 ---
+
+## 9. Comprehensive CLI & REPL Commands
+
+Initiating the CLI:
+
+| CLI arguments | Output |
+| --- | --- |
+| `aura run` | Starts the interactive continuous session |
+| `aura run "Target Context"` | Submits a single task instruction, completes it, and exits |
+| `aura version` | Display tool version information |
+
+In-session Agent REPL Controls:
+
+| Target Command | Execution Result |
+| --- | --- |
+| `/voice` | Engages Speech-To-Text pipeline for hands-free queries |
+| `/help` | Explains all commands |
+| `/clear` | Generates a clean slate by purging the context window |
+| `/sessions` | Parses and lists serialized past execution chains |
+| `/resume` | Hooks an old execution chain back into the present context |
+| `/tools` | Dumps the locally detected tool payloads |
+| `/learn` | Manually invokes the Imitation Learning capture stream |
+| `/cwd` | Returns the current scope path |
+| `/exit` | Gracefully terminate |
+
+---
