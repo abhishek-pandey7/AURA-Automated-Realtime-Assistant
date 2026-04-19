@@ -62,3 +62,15 @@ AURA features dedicated automation pipelines for standard office workflows:
 - **Google Forms**: Interactively fill out complex web forms relying on a secure, locally-stored user profile and historical context.
 
 ---
+
+## 3. Tool Architecture
+
+AURA is equipped with a vast tool registry. The agent decides precisely when and how to deploy these tools.
+
+*   **Filesystem Controls**: Read documents, overwrite source files, incrementally patch files, create/delete directories.
+*   **Shell Controls**: Execute bash or windows command prompt operations. Read STDOUT and STDERR to verify outcomes.
+*   **Web Engine**: Pure HTTP retrieval, localized scraping, and pure web searching to inject research before generating code.
+*   **Desktop Controls**: Control the mouse matrix, simulate keyboard events at the OS level, deploy Windows OCR and Tesseract screen captures.
+*   **Playwright Engine**: Fully capable Chrome orchestration for front-end manipulation.
+
+---
