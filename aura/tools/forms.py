@@ -90,6 +90,36 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "forms_generate_prefill_url",
+            "description": (
+                "Generate a Google Forms pre-filled URL given the base form URL and a mapping "
+                "of entry IDs to values. The resulting URL can be opened directly and will have "
+                "all specified fields pre-populated. Use this when you know the form's entry IDs "
+                "(e.g. entry.123456789). Entry IDs can be found by inspecting the form HTML or "
+                "Google's 'Get pre-filled link' feature."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "form_url": {
+                        "type": "string",
+                        "description": "The base Google Forms URL (e.g. https://forms.gle/... or https://docs.google.com/forms/d/.../viewform)."
+                    },
+                    "field_values": {
+                        "type": "object",
+                        "description": (
+                            "A dict mapping entry IDs to values, e.g. "
+                            "{\"entry.123456\": \"Abhishek Pandey\", \"entry.789012\": \"abhishek@example.com\"}."
+                        )
+                    }
+                },
+                "required": ["form_url", "field_values"]
+            }
+        }
+    }
 ]
 
 
@@ -139,3 +169,35 @@ def forms_update_profile(field: str, value: str) -> str:
         return f"[ AURA ] forms_update_profile failed: {ex}"
 
 
+def forms_generate_prefill_url(form_url: str, field_values: dict) -> str:
+    """Generate a Google Forms pre-filled URL."""
+    try:
+        from urllib.parse import urlparse, urlencode, urlunparse, parse_qs, urljoin
+
+        # Normalise the base URL to the /viewform endpoint
+        parsed = urlparse(form_url)
+        # Strip any existing query params that clash
+        base = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+        if not base.endswith("/viewform"):
+            base = base.rstrip("/") + "/viewform"
+
+        # Build query string: each entry.XXXXXXX=value pair
+        params = []
+        for entry_id, val in field_values.items():
+            # Accept bare numbers, "entry.XXXX", or "entry_XXXX"
+            key = entry_id if entry_id.startswith("entry.") else f"entry.{entry_id.lstrip('entry_')}"
+            params.append((key, str(val)))
+
+        query = urlencode(params)
+        prefill_url = f"{base}?{query}"
+
+        lines = [
+            "[ AURA ] ✓ Pre-filled Google Forms URL generated:",
+            f"  {prefill_url}",
+            "",
+            "  Open this URL in a browser — all specified fields will be pre-populated.",
+            "  The user still needs to review and submit the form manually (or use desktop tools to click Submit).",
+        ]
+        return "\n".join(lines)
+    except Exception as ex:
+        return f"[ AURA ] forms_generate_prefill_url failed: {ex}"
