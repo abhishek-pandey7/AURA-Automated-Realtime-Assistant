@@ -62,6 +62,34 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "forms_update_profile",
+            "description": (
+                "Save or update a single field in the user's local profile. "
+                "Use this when the user provides new personal information that should be remembered."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "field": {
+                        "type": "string",
+                        "description": (
+                            "Profile field name. Common fields: full_name, first_name, last_name, "
+                            "email, phone, organization, role, college, department, year_of_study, "
+                            "roll_number, city, state, country, pincode, linkedin, github, skills, bio."
+                        )
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Value to store for this field."
+                    }
+                },
+                "required": ["field", "value"]
+            }
+        }
+    },
 ]
 
 
@@ -97,5 +125,17 @@ def forms_load_profile() -> str:
         )
     except Exception as ex:
         return f"[ AURA ] forms_load_profile failed: {ex}"
+
+
+def forms_update_profile(field: str, value: str) -> str:
+    """Update a single field in user_profile.json."""
+    try:
+        profile = _load_raw_profile()
+        profile[field] = value
+        with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+            json.dump(profile, f, indent=2)
+        return f"[ AURA ] ✓ Profile updated: {field!r} = {value!r}"
+    except Exception as ex:
+        return f"[ AURA ] forms_update_profile failed: {ex}"
 
 
