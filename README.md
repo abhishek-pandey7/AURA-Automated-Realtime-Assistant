@@ -213,3 +213,16 @@ In-session Agent REPL Controls:
 | `/exit` | Gracefully terminate |
 
 ---
+
+## 10. Verification & Tests
+
+To run the verification suite and ensure that your host configuration has correctly bonded with AURA's toolkit:
+```bash
+# Validates local filesystem, shell, and offline capability functions
+python tests/test_tools.py
+
+# Validates connectivity and handshakes with the inference server
+python tests/test_endpoint.py
+```
+
+---
