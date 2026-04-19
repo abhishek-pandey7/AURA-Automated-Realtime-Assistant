@@ -51,6 +51,23 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "gmail_read_inbox",
+            "description": "Read the latest unread emails from the Gmail inbox. Returns sender, subject, and a short snippet.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Number of recent emails to return (default 5)."
+                    }
+                },
+                "required": []
+            }
+        }
+    }
 ]
 
 
@@ -113,3 +130,36 @@ def gmail_send(to: str, subject: str, body: str, cc: str = "") -> str:
         return f"[ AURA ] Gmail send failed: {ex}"
 
 
+def gmail_read_inbox(max_results: int = 5) -> str:
+    try:
+        service = _get_service()
+
+        result = service.users().messages().list(
+            userId="me",
+            labelIds=["INBOX", "UNREAD"],
+            maxResults=max_results
+        ).execute()
+
+        messages = result.get("messages", [])
+        if not messages:
+            return "[ AURA ] No unread messages in your inbox."
+
+        lines = [f"[ AURA ] {len(messages)} unread email(s):\n"]
+        for msg_ref in messages:
+            msg = service.users().messages().get(
+                userId="me",
+                id=msg_ref["id"],
+                format="metadata",
+                metadataHeaders=["From", "Subject", "Date"]
+            ).execute()
+
+            headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+            sender = headers.get("From", "Unknown")
+            subject = headers.get("Subject", "(No subject)")
+            date = headers.get("Date", "")
+            snippet = msg.get("snippet", "")[:100]
+            lines.append(f"  • From: {sender}\n    Subject: {subject}\n    Date: {date}\n    Preview: {snippet}\n")
+
+        return "\n".join(lines)
+    except Exception as ex:
+        return f"[ AURA ] Gmail read failed: {ex}"
