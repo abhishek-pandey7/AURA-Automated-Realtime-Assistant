@@ -74,3 +74,17 @@ AURA is equipped with a vast tool registry. The agent decides precisely when and
 *   **Playwright Engine**: Fully capable Chrome orchestration for front-end manipulation.
 
 ---
+
+## 4. How it Differs from Cloud Coding Assistants
+
+| Feature | Cloud Assistants (e.g., Claude Code, Codex) | AURA |
+| --- | --- | --- |
+| Underlying LLM Engine | Proprietary (Anthropic/OpenAI) | Agnostic / Self-hostable (Any OpenAI-compatible API) |
+| Architecture Philosophy | Reactive to simple instructions | Proactive upfront Task Planning |
+| Desktop & Computer Vision | No | Yes (OS-level Mouse/KB bindings & OCR map generation) |
+| Organic Imitation Learning | No | Yes (Macro generation via pynput/VLM) |
+| Browser Handling | Limited HTML curl | Native Playwright bindings with Profile Persistence |
+| Confirmation Guards | Yes | Yes (Granular Y/N safeguards for Destructive actions) |
+| Complete Autonomy | Low, prompts constantly | High, handles multi-hour execution chains |
+
+---
