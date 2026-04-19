@@ -248,3 +248,7 @@ AURA bridges multiple complex open-source libraries.
 | **winsdk** | Native, ultra-low-latency OCR engine mappings | Windows |
 
 ---
+
+## 12. License
+
+Released under standard MIT License privileges.
