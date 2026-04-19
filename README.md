@@ -88,3 +88,29 @@ AURA is equipped with a vast tool registry. The agent decides precisely when and
 | Complete Autonomy | Low, prompts constantly | High, handles multi-hour execution chains |
 
 ---
+
+## 5. Software Architecture
+
+```
+aura/
+|-- __init__.py
+|-- cli.py              Command Line entry point
+|-- ui.py               Rich Terminal UI, spinners, and REPL loop integration
+|-- agent.py            The core LLM prompt loop. Feeds observations back into memory.
+|-- planner.py          Converts overarching instructions into ordered subtask structures.
+|-- memory.py           Abstracts conversation persistence, contextual truncation, and state saving.
+|-- learning.py         Imitation learning loop, VLM code synthesis, and runtime macro injection.
+|-- confirm.py          Prompts human-in-the-loop validation for sys-admin actions.
+|-- config.py           Validates and orchestrates the environment config payload.
+|-- tools/
+    |-- shell.py        Isolated subprocess deployment.
+    |-- filesystem.py   Advanced string manipulation and file targeting.
+    |-- browser.py      AURA browser automation engine targeting Playwright.
+    |-- web.py          General HTTP handlers.
+    |-- desktop.py      Windows/macOS computer vision interface.
+    |-- forms.py        Automated data filling engine.
+    |-- meet.py         Conference scheduler integration.
+    |-- ...             (various generated action macros)
+```
+
+---
