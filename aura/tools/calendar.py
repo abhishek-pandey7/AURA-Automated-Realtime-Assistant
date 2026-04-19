@@ -36,6 +36,39 @@ TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "calendar_add_event",
+            "description": "Add a new event or reminder to Google Calendar.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Title/summary of the event."
+                    },
+                    "start_datetime": {
+                        "type": "string",
+                        "description": "Start date and time in ISO 8601 format, e.g. '2025-04-20T09:00:00'. For all-day events use 'YYYY-MM-DD'."
+                    },
+                    "end_datetime": {
+                        "type": "string",
+                        "description": "End date and time in ISO 8601 format. If omitted, defaults to 1 hour after start."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional longer description or notes for the event."
+                    },
+                    "reminder_minutes": {
+                        "type": "integer",
+                        "description": "Minutes before the event to send a popup reminder (default 10)."
+                    }
+                },
+                "required": ["title", "start_datetime"]
+            }
+        }
+    },
 ]
 
 
@@ -103,5 +136,56 @@ def calendar_list_events(max_results: int = 10) -> str:
         return "\n".join(lines)
     except Exception as ex:
         return f"[ AURA ] Calendar list failed: {ex}"
+
+
+def calendar_add_event(
+    title: str,
+    start_datetime: str,
+    end_datetime: str = None,
+    description: str = "",
+    reminder_minutes: int = 10
+) -> str:
+    try:
+        service = _get_service()
+
+        # Detect all-day vs timed event
+        if "T" in start_datetime:
+            start_body = {"dateTime": start_datetime, "timeZone": "Asia/Kolkata"}
+            if end_datetime:
+                end_body = {"dateTime": end_datetime, "timeZone": "Asia/Kolkata"}
+            else:
+                # Default: 1 hour duration
+                dt = datetime.datetime.fromisoformat(start_datetime)
+                end_body = {
+                    "dateTime": (dt + datetime.timedelta(hours=1)).isoformat(),
+                    "timeZone": "Asia/Kolkata"
+                }
+        else:
+            # All-day event
+            start_body = {"date": start_datetime}
+            if end_datetime:
+                end_body = {"date": end_datetime}
+            else:
+                dt = datetime.date.fromisoformat(start_datetime)
+                end_body = {"date": (dt + datetime.timedelta(days=1)).isoformat()}
+
+        event = {
+            "summary": title,
+            "description": description,
+            "start": start_body,
+            "end": end_body,
+            "reminders": {
+                "useDefault": False,
+                "overrides": [
+                    {"method": "popup", "minutes": reminder_minutes},
+                ]
+            }
+        }
+
+        created = service.events().insert(calendarId="primary", body=event).execute()
+        link = created.get("htmlLink", "")
+        return f"[ AURA ] ✓ Event '{title}' created!\n  Starts: {start_datetime}\n  Link: {link}"
+    except Exception as ex:
+        return f"[ AURA ] Calendar add failed: {ex}"
 
 
