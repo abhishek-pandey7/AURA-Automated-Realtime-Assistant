@@ -160,3 +160,30 @@ Modify your locally generated `.env` file to dictate how AURA behaves.
 | AURA_SAFE_MODE | Demand human verification for destructive tool deployments | true |
 
 ---
+
+## 8. Platform Specific Setup and Troubleshooting
+
+### macOS (Apple Silicon & Intel)
+The `pyaudio` and `SpeechRecognition` libraries require native system dependencies in order to parse host-level audio successfully. The `install.sh` sequence usually handles this via Homebrew. If you prefer to install manually:
+
+```bash
+# Needed for internal audio processing and /voice commands
+brew install portaudio flac
+pip install -e .
+
+# Manual Fix: SpeechRecognition on Apple Silicon ships an x86 flac binary by default.
+# The following script explicitly assigns the native ARM flac binary to the Python package.
+FLAC_DST=".venv/lib/$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/speech_recognition/flac-mac"
+cp /opt/homebrew/bin/flac "$FLAC_DST"
+```
+
+### Windows
+Normally all dependencies correctly install via typical `pip` channels. On some environments `pyaudio` lacks a pre-compiled wheel for your python distribution:
+```bat
+pip install pipwin
+pipwin install pyaudio
+```
+
+*Note: The native `desktop_find_text` and vision toolkit incorporates Windows native UI SDK (`winsdk`) for OCR, running exceptionally fast on Windows environments. Cross-platform counterparts substitute internal libraries as needed.*
+
+---
