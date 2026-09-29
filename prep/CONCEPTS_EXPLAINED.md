@@ -1495,3 +1495,32 @@ You did not use these. **That's correct** — AURA is a local single-user CLI an
 adding them would be architecture for its own sake. But interviewers will raise
 them, and "we didn't need that, here's why, and here's exactly when I would"
 is a much stronger answer than a blank look or a made-up justification.
+
+## B1. Caching
+
+**What it is.** Store the result of expensive work so you don't redo it. The
+cost is that cached data can go **stale** — the underlying truth changes and your
+copy doesn't.
+
+The central question in any caching design is **invalidation**: how do you know
+when to throw the copy away? Options are time-based (TTL — expire after N
+seconds, simple, sometimes wrong), event-based (invalidate when the source
+changes, correct, needs plumbing), or never (fine only for immutable data).
+
+**Where it would apply to AURA:**
+
+- **Prompt caching.** Providers can cache the processed form of a static prompt
+  prefix. Your ~4,000-token system-prompt-plus-schemas block (see A11) is
+  identical on every iteration — exactly the shape prompt caching exists for.
+  You can't use it because you're on a self-hosted proxy, and that's a real,
+  quantifiable cost of the model-independence trade. Good detail.
+- **Semantic caching of plans.** Same goal → same plan. You could cache
+  `planner.plan()` results keyed by goal text. **Danger:** the plan may be
+  correct for the goal but wrong for the *current environment*, which has
+  changed. Stale plans are worse than slow plans.
+- **`web_fetch` results.** Fetching the same URL twice in one session is pure
+  waste. Easy win, low risk with a short TTL.
+
+**What you'd say:** *"Caching applies in three places, and the one I'd actually
+want is prompt caching for the static prefix — but I can't have it because I'm
+self-hosting. That's a genuine cost of the portability choice."*
