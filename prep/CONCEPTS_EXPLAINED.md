@@ -1199,3 +1199,100 @@ one invariant the registry actually requires. Same parse pass gives you the
 security check from the fix ladder above. Two birds.
 
 ---
+
+## A10. Lazy initialisation & singletons
+
+### Lazy initialisation
+
+Don't create an expensive thing until someone actually needs it.
+
+`browser.py:80`:
+
+```python
+def _ensure_started(self):
+    if self._page is None:
+        from playwright.sync_api import sync_playwright
+        self._playwright = sync_playwright().start()
+        ...
+```
+
+The guard `if self._page is None` is the whole pattern: first call does the
+setup, every later call is a no-op. Every public browser function calls
+`_ensure_started()` first (`:117`, `:128`, `:141`, ...), so the browser comes up
+on first use regardless of which tool triggers it.
+
+**Why here:** launching Chromium takes seconds and hundreds of megabytes, and
+most AURA tasks never touch the browser at all. Eager initialisation would tax
+every single startup for a capability usually unused. Note also that the
+`playwright` import itself is inside the function — even the import cost is
+deferred.
+
+**The cost:** the first browser call is mysteriously slow, and the model may read
+that latency as a failure. And you find out the browser is broken mid-task
+rather than at startup, which is a worse time to find out.
+
+### Singleton
+
+Exactly one instance of something, shared by everyone.
+
+`browser.py:184-191`:
+
+```python
+_session: BrowserSession | None = None
+
+def _get_session() -> BrowserSession:
+    global _session
+    if _session is None:
+        _session = BrowserSession()
+    return _session
+```
+
+**Why here — and this is the important part:** your tool API is *stateful*.
+`browser_click(selector)` acts on "the current page." That phrase only means
+something if the page persisted from the previous `browser_navigate`. A fresh
+browser per call would break the entire design, not merely be slower.
+
+### The costs, which are the standard criticisms of singletons
+
+- **Global mutable state.** Hard to test — you can't construct an isolated
+  `BrowserSession` in a test without monkeypatching the module global. Hard to
+  reason about — any code anywhere can mutate it.
+- **Not thread-safe.** Two threads could both evaluate `_session is None` as true
+  and both construct a browser. Irrelevant for a single-threaded CLI; a real bug
+  the moment AURA runs tasks in parallel. The same race exists in
+  `_ensure_started`.
+- **Lifecycle is nobody's job.** `close_browser()` exists at `:211` and **is
+  never called anywhere in the codebase.** The Playwright process leaks until
+  AURA exits. An `atexit` hook or a REPL shutdown handler would fix it. Worth
+  volunteering — "I have a cleanup function I forgot to wire up" is a small,
+  honest, very human admission.
+
+### The three-tier fallback — the good part of this file
+
+`browser.py:88-112` is genuinely nice engineering and deserves airtime:
+
+1. **`connect_over_cdp("http://localhost:9222")`** — attach to a Chrome the user
+   already launched with remote debugging. Best case: their real browser, real
+   session, nothing disrupted.
+2. **`launch_persistent_context(user_data_dir=...)`** — launch Chrome with the
+   user's actual profile directory. Their cookies and logins, but AURA controls
+   the process. Fails if Chrome is already running (profile directories are
+   exclusively locked).
+3. **`chromium.launch()`** — a clean isolated Chromium. Works always, logged into
+   nothing.
+
+The degradation is along the axis that matters — **authenticated session state**
+— and the failure message at `:107-109` tells the user precisely what went wrong
+and how to get tier 1 or 2 back.
+
+And then, in the same function at `:85`:
+
+```python
+user_data_dir = r"C:\Users\Abhishek Pandey\AppData\Local\Google\Chrome\User Data"
+```
+
+Thoughtful fallback design and a hardcoded personal absolute path, eight lines
+apart. Point at both — it's a good illustration of the difference between design
+thinking and debugging residue, and owning that distinction reads well.
+
+---
