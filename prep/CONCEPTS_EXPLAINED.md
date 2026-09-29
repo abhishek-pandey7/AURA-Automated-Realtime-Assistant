@@ -1676,3 +1676,41 @@ least reusable part of the history.** A 4,000-character page fetch matters for
 one or two iterations and then never again. Compacting *tool results
 specifically* — while keeping the assistant's reasoning verbatim — gets most of
 the savings with much less risk than summarising everything uniformly.
+
+## B8. Sandboxing and isolation
+
+**What it is.** Restricting what code can do, so untrusted code can't harm the
+host. Layers, weakest to strongest:
+
+- **Process isolation** — separate user accounts, dropped privileges. Weak.
+- **Containers** (Docker) — isolated filesystem, network and process namespaces,
+  but a **shared kernel**. A kernel exploit escapes. Fine for trusted-ish code.
+- **gVisor** — a user-space kernel intercepting syscalls, so the real kernel is
+  shielded. Stronger, some performance cost.
+- **MicroVMs** (Firecracker) — a real VM with its own kernel, booting in
+  milliseconds. Strongest practical option, and what serverless platforms use to
+  run untrusted code.
+
+Add **egress filtering** (what it can reach on the network) and **resource
+caps** (CPU, memory, disk, time) on top of any of these.
+
+**Where it applies to AURA.** Two surfaces, both serious:
+
+- LLM-generated code executed with no review (A9).
+- `subprocess.run(shell=True)` with model-authored commands (`shell.py:44`).
+
+**The framing that matters — and this is the point to get right:** AURA's current
+security model is *"it's your machine, your risk, gated for accidents not
+adversaries."* That's defensible for a local tool you run on your own laptop.
+
+It becomes **indefensible the moment it's hosted**, because you'd be running
+LLM-generated code and arbitrary shell commands on *your* infrastructure on
+behalf of other people. Multi-tenant AURA needs gVisor or Firecracker, egress
+filtering and per-tenant caps **before it could responsibly accept one external
+user**.
+
+And the reason you didn't sandbox locally is not laziness — it's that sandboxing
+removes the entire point. AURA needs your *real* desktop, your *real* logged-in
+Chrome profile, your *real* Gmail token. A sandboxed AURA is a cloud coding
+agent, which is the thing it exists to not be. Frame it as a deliberate trade
+with a known boundary, not an oversight.
