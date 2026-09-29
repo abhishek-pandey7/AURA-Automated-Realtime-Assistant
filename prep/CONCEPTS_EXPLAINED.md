@@ -1796,3 +1796,34 @@ That's a strong close: it shows you understand the concept, know where it lives
 in your code, and found a real bug with it.
 
 ---
+
+## Quick glossary
+
+| Term | One line |
+| --- | --- |
+| **Atomic** | Fully happens or doesn't; no observable halfway state |
+| **Backoff** | Increasing delay between retries |
+| **Context window** | Max tokens a model can consider in one request. A hard wall |
+| **Centroid** | Geometric centre of a shape; how you turn a bounding box into a click point |
+| **Deny-list / allow-list** | Enumerate the forbidden / enumerate the permitted. Allow-lists fail closed |
+| **Defence in depth** | Multiple independent controls, so one failure isn't a breach |
+| **Eventual consistency** | Replicas converge, but not instantly |
+| **Fail-fast** | Recognise a hopeless case and surface it now |
+| **Fail-open / fail-closed** | On error, allow through / block. Closed is safer |
+| **Graceful degradation** | Reduced function instead of total failure |
+| **Hard / soft dependency** | Failure stops the system / failure only degrades it |
+| **HITL** | Human-in-the-loop — pause for approval before acting |
+| **Idempotent** | Doing it twice equals doing it once. Makes retries safe |
+| **Jitter** | Randomness in backoff, to stop synchronised retry storms |
+| **Lazy initialisation** | Create the expensive thing on first use, not at startup |
+| **Least privilege** | Request the narrowest permission that does the job |
+| **RAG** | Retrieve relevant context at query time instead of prompting everything |
+| **ReAct** | Reasoning + Acting interleaved in a loop |
+| **Shard** | Split data across machines by key; each holds a different subset |
+| **Singleton** | Exactly one shared instance |
+| **Stale** | Cached data that no longer matches the truth |
+| **Temperature** | Randomness dial on model output. Low = deterministic |
+| **Thundering herd** | Many clients retrying in sync and re-crashing a recovering service |
+| **Token** | Model's unit of text, ≈ ¾ of a word. What you pay and are limited by |
+| **Write amplification** | Writing far more bytes than the logical change needs |
+| **Write-through** | Persist on every change, rather than batching for later |
