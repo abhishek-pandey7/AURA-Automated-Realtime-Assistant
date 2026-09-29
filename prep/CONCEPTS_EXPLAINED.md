@@ -657,3 +657,126 @@ fail-closed, and it's the right default — the safe outcome is the one you get 
 doing nothing.
 
 ---
+
+## A6. Retries, backoff, fail-fast, graceful degradation
+
+### Transient vs permanent failures
+
+The whole of retry logic rests on one distinction:
+
+- **Transient** — will probably work if you try again. Network blip, server
+  overloaded (503), timeout, cold start.
+- **Permanent** — will never work no matter how many times you try. Bad API key
+  (401), nonexistent model (404), malformed request (400).
+
+**Retrying a permanent failure is pure waste**: you burn the full backoff
+duration and then fail anyway, having made the user wait for nothing.
+
+Your classifier, `agent.py:135-139`:
+
+```python
+is_retryable = (
+    "502" in err_str or "500" in err_str or "503" in err_str
+    or "timed out" in err_str or "timeout" in err_str
+    or "connection" in err_str or "read error" in err_str
+)
+```
+
+Server errors and network problems retry. Everything else — including a 401 —
+breaks out immediately. **That's fail-fast**: recognising a hopeless case and
+surfacing it now instead of after 15 seconds of theatre.
+
+The weakness: it's substring matching on an error *message*. `"500" in err_str`
+would match an error that merely mentioned "500 tokens." Fragile. Checking a
+structured status code from the exception object would be correct.
+
+### Exponential backoff
+
+Retry with increasing delays rather than immediately or at a fixed interval.
+
+```python
+wait = (p_retry + 1) * 5     # agent.py:141 → 5s, then 10s
+```
+
+Two reasons the delay grows. **A retry that's too fast doesn't help** — if the
+server needed 3 seconds to recover, hammering it at 100ms just fails ten more
+times. And **retries add load to a system that's already struggling**; backing
+off gives it room.
+
+Pedantic note you can use if someone's being precise: 5s→10s is *linear*
+backoff, not strictly exponential (which would be 5→10→20, doubling). At three
+attempts the distinction doesn't matter, but knowing it is free credibility.
+
+### Jitter
+
+The piece you don't have, and it's fine that you don't.
+
+If a thousand clients all fail at the same moment and all back off by exactly
+5 seconds, they all retry at exactly the same moment — a **thundering herd** that
+re-crashes the server you were waiting for. **Jitter** adds randomness
+(`wait = base * random.uniform(0.5, 1.5)`) so retries spread out.
+
+With one CLI client, jitter is pointless. The correct answer is: *"No jitter,
+because there's one client. It'd matter immediately if AURA ran multi-instance,
+and that's exactly the kind of thing I'd get for free by using `tenacity`
+instead of hand-rolling."*
+
+### Timeouts
+
+`agent.py:21-25`, and the comment is the good part:
+
+```python
+# Generous timeout: Render free-tier can be slow on cold starts.
+# connect=15s  (time to establish TCP connection)
+# read=180s    (time to receive the full streamed response)
+_client = OpenAI(..., timeout=httpx.Timeout(timeout=180.0, connect=15.0))
+```
+
+Two *separate* timeouts, which is the sophisticated part. **Connect timeout** is
+how long to wait to establish a TCP connection — if that takes more than 15
+seconds, the host is unreachable and waiting longer won't help. **Read timeout**
+is how long to wait for the response body — legitimately long, because a model
+generating 4096 tokens genuinely takes minutes.
+
+Collapsing these into one number means either giving up too early on slow
+generation, or waiting three minutes to discover a host is down. Splitting them
+is correct, and the comment proves it was deliberate.
+
+### Graceful degradation
+
+Reduced functionality instead of total failure. You have three instances, and
+naming all three shows it was a pattern rather than a one-off:
+
+| Where | Primary | Degrades to |
+| --- | --- | --- |
+| `planner.py:87` | LLM-generated plan | The raw goal as one task |
+| `web.py:92-98` | DuckDuckGo scrape | Google scrape, then an error string |
+| `browser.py:88-112` | Connect to running Chrome via CDP | Launch your Chrome profile, then a clean Chromium |
+
+That third one is the nicest, because it degrades along an axis that *matters*:
+tier 1 and 2 give you the user's real cookies and logins; tier 3 gives you a
+working browser that's logged into nothing. And it tells the user what happened
+and how to fix it (`browser.py:107-109`) rather than silently doing something
+worse. **Degrading loudly beats degrading silently** — compare that to §A3's
+`except: pass`, which is the same codebase doing the opposite.
+
+### One more pattern worth naming: errors as return values
+
+Every tool in AURA returns a *string* on failure rather than raising:
+
+```python
+except Exception as e:
+    return f"[ AURA ] Error running command: {e}"
+```
+
+This looks sloppy and is actually deliberate. The string goes back to the model
+as a tool result — so **the model can read the error and react to it**. A raised
+exception would crash the loop; a returned error message becomes an observation
+the agent can recover from. That's the self-correction mechanism from A2, and it
+only works because errors are data rather than control flow.
+
+`dispatch()` in `tools/__init__.py:44-51` is the safety net: it wraps every tool
+call, so even a tool that forgets to handle its own errors can't take down the
+agent.
+
+---
