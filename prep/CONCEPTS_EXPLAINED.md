@@ -1548,3 +1548,32 @@ decision arrives.
 So moving to a queue is not a drop-in change — it's a redesign of the safety
 layer from A5. Naming that coupling unprompted is the strong version of this
 answer.
+
+## B3. Load balancing, replication, sharding
+
+Three different things that get conflated. Know the distinction.
+
+**Load balancing** — distribute incoming requests across multiple identical
+servers. Solves: one server can't handle the volume. Needs the servers to be
+interchangeable, which means **statelessness** (or sticky sessions, which
+partially defeats the point).
+
+**Replication** — keep copies of the same data on multiple machines. Solves:
+read capacity and availability (a replica can take over if the primary dies).
+Introduces **replication lag**: a write to the primary isn't instantly visible on
+replicas, so a user can write something and then not see it. That's
+**eventual consistency**, and it's the standard trade.
+
+**Sharding** — split data across machines by key, so each machine holds a
+*different* subset. (Users A–M here, N–Z there.) Solves: the data doesn't fit on
+one machine, or write volume exceeds one machine. Costs: queries spanning shards
+become expensive, cross-shard transactions are hard, and **choosing a shard key
+badly creates hot spots** that undo the whole exercise.
+
+**Where they'd apply to AURA:** load balancing across inference replicas, if you
+hosted it. Replication and sharding — essentially nowhere, because there's no
+shared dataset. Session files are per-user and never queried across users.
+
+**What you'd say:** *"Load balancing across inference replicas, yes. Sharding,
+no — there's no shared dataset to split. Sessions are per-user and nothing ever
+queries across them, so sharding would solve a problem I don't have."*
