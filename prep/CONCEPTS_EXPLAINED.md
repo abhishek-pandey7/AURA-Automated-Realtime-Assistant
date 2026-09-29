@@ -1746,3 +1746,53 @@ Note that you already have the *display* half solved — the Rich output in
 `agent.py:257-330` makes a live run followable. What's missing is the durable
 half. Framing it that way ("I built for watching, not for reviewing") is precise
 and honest.
+
+## B10. Idempotency
+
+**What it is.** An operation is **idempotent** if doing it twice has the same
+effect as doing it once. `DELETE /users/5` is idempotent (the user ends up
+deleted either way). `POST /charge-card` is emphatically not.
+
+**Why it matters, and why it matters *here*:** it's the property that makes
+retries safe. If you retry a non-idempotent operation after a timeout, you may
+do it twice — and you can't tell, because a timeout doesn't tell you whether the
+request was processed before the connection dropped.
+
+**Where it applies to AURA, sharply.** Your retry logic (A6) retries the **LLM
+call**, which is safe — generating text twice costs money but breaks nothing.
+
+But **tool calls are not retried**, and that's *correct*, because many of them
+are aggressively non-idempotent:
+
+| Tool | Idempotent? | Running it twice |
+| --- | --- | --- |
+| `read_file`, `list_dir`, `web_fetch` | Yes | Harmless |
+| `write_file` | Yes-ish | Same content → same result |
+| `gmail_send` | **No** | Two emails sent |
+| `calendar_add_event` | **No** | Two calendar events |
+| `meet_create` | **No** | Two meetings, two sets of invites |
+| `desktop_click` | **No** | Two clicks — possibly two purchases |
+
+There's a live example in `meet.py:168`:
+
+```python
+"requestId": f"aura-meet-{int(datetime.datetime.now().timestamp())}",
+```
+
+Google uses `requestId` as an **idempotency key** — send the same one twice and
+Google dedupes rather than creating two conferences. But you generate it from
+`now()`, so a retry produces a *different* key and Google would happily create a
+second Meet. Using a stable key derived from the event content would make
+`meet_create` genuinely retry-safe.
+
+**What you'd say:** *"I retry the LLM call, not tool calls, and that's deliberate
+— `gmail_send` and `calendar_add_event` aren't idempotent, so a retry means a
+duplicate email or a duplicate event. If I wanted tool-level retries I'd need
+idempotency keys. There's actually a near-miss in `meet.py` where Google gives me
+one via `requestId` and I'm generating it from a timestamp, which defeats the
+purpose."*
+
+That's a strong close: it shows you understand the concept, know where it lives
+in your code, and found a real bug with it.
+
+---
