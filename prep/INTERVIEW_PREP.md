@@ -1453,3 +1453,24 @@ Good question to have a crisp answer for. Pick one, own it, show the reasoning.
 > helped.
 
 ---
+
+## Cheat sheet — file → what to say about it
+
+| File | The one-liner |
+| --- | --- |
+| `aura/cli.py` | Entry point, console script via `pyproject.toml`. Single-shot or REPL. |
+| `aura/ui.py` | REPL, slash commands, plan rendering, voice input. Legibility = trust. |
+| `aura/planner.py` | Stage 1. Separate small LLM call → JSON subtasks. Degrades to `[goal]`. |
+| `aura/agent.py` | **The core.** ReAct loop, retries, tool dispatch, image interception. |
+| `aura/memory.py` | Write-through JSON per session. Resumable. O(n²) and non-atomic. |
+| `aura/tools/__init__.py` | Plugin registry, `pkgutil` auto-discovery, hot reload. `except: pass` bug. |
+| `aura/confirm.py` | Human-in-the-loop gate. Enforced per-tool = defence in depth. |
+| `aura/config.py` | dotenv, fail-fast on missing key, deny-list patterns. |
+| `aura/learning.py` | Imitation learning. Record → VLM → codegen → hot register. Biggest risk. |
+| `aura/tools/desktop.py` | Local WinRT OCR spatial map + vision fallback. Tiered perception. |
+| `aura/tools/browser.py` | Lazy singleton Playwright, 3-tier connect fallback. Hardcoded path bug. |
+| `aura/tools/shell.py` | `subprocess.run` with timeout + confirmation. The scary one. |
+| `aura/tools/web.py` | Cheap tier: DDG scrape → Google fallback, BS4 cleanup, truncation. |
+| `aura/tools/gmail.py` `calendar.py` `meet.py` | Google OAuth. Duplicated 3×, scopes inconsistent. |
+| `aura/tools/forms.py` | Local JSON profile for form autofill. PII in plaintext. |
+| `tests/` | Smoke script, not a suite. Know the gap, name the fix. |
