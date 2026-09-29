@@ -1618,3 +1618,33 @@ JS and CSS. That's the entire answer. Don't manufacture more — confidently
 saying "not applicable, and here's the only scenario where it would be" is the
 right response, and pretending otherwise is exactly the failure mode this
 question is designed to detect.
+
+## B6. RAG and vector search
+
+**RAG** — Retrieval-Augmented Generation. Rather than putting everything in the
+prompt, store your corpus externally, **retrieve** only the relevant parts at
+query time, and inject those.
+
+**How retrieval works.** An **embedding model** turns text into a vector — a list
+of numbers positioning that text in a semantic space where similar meanings land
+near each other. Store vectors in a **vector database** (Chroma, FAISS, pgvector,
+Pinecone). At query time, embed the query and find the nearest vectors by cosine
+similarity. "Nearest" means *semantically* similar, not keyword-matching — which
+is why it finds "automobile" for a query about "car."
+
+**The two places it applies to AURA:**
+
+**1. Tool retrieval** (Axis 2 of §4). At 300 tools you can't put every schema in
+every prompt. Embed the descriptions; inject only the top-k relevant to the
+current goal. `_init_tools()` is already the natural place to build the index.
+
+**The trade-off is important and specific:** a retrieval miss means the agent
+**cannot see** the tool it needs and will confidently do something worse with a
+tool it *can* see. That's a nastier failure than a big prompt, because it's
+silent. Mitigation: **pin** the core tools — bash, file ops — as always-present
+regardless of retrieval, and only make the long tail retrievable.
+
+**2. Long-term memory.** Embed past session transcripts; retrieve relevant ones
+when starting a new task. This is your README's "Long-term Memory (RAG)" roadmap
+item and it's the natural evolution of `memory.py`. Also where SQLite or a real
+vector store finally earns its place over JSON files.
