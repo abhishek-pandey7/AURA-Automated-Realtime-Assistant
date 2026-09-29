@@ -218,3 +218,101 @@ tolerates fenced JSON. That's the tax you pay for model independence."*
   decision.
 
 ---
+
+## A2. The agent loop / ReAct
+
+### The problem it solves
+
+One model call gets you one shot. The model has to guess everything about your
+environment up front, and if any guess is wrong, the output is quietly broken
+and nothing tells you.
+
+Real work isn't like that. Real work is: try something, look at what happened,
+adjust. You run the tests, you see the failure, you fix it, you run them again.
+
+**ReAct** — **Rea**soning + **Act**ing — is the pattern that gives a model that
+same cycle. Reasoning and acting interleave instead of happening once.
+
+### The loop, concretely
+
+```
+   ┌─────────────────────────────────────────────┐
+   │                                             │
+   ▼                                             │
+[ Call the model with: system + full history ]   │
+   │                                             │
+   ▼                                             │
+[ Did it return tool_calls? ]                    │
+   │                    │                        │
+   │ no                 │ yes                    │
+   ▼                    ▼                        │
+[ DONE ]          [ Execute each tool ]          │
+                        │                        │
+                        ▼                        │
+                  [ Append results to history ] ─┘
+```
+
+That's `aura/agent.py:110-251`, almost line for line. The termination check is
+`:156`:
+
+```python
+if not message.tool_calls:
+    final = message.content or "[ AURA ] Task complete."
+```
+
+**No tool calls means finished.** The model signals completion by simply talking
+instead of acting.
+
+### Why this specific loop gives you self-correction
+
+Because the tool result goes back into the history, the model *sees what
+happened*. Concretely, from your README's own demo trace:
+
+```
+iteration 3:  model calls  bash("pytest -v")
+              result:      "1 failed, 0 passed ... AssertionError on line 12"
+              ↑ this text is now in the conversation
+
+iteration 4:  model has read that failure, calls  patch_file(...)
+
+iteration 5:  model calls  bash("pytest -v")
+              result:      "1 passed"
+
+iteration 6:  no tool calls → done
+```
+
+There's no error-handling code in AURA that does this. The recovery is emergent
+from the loop plus the prompt instruction at `agent.py:38` ("If a command fails,
+read stderr, identify the cause, fix it, and retry automatically"). That's the
+whole trick, and it's worth saying plainly: *the loop is what turns a text
+generator into something that can recover.*
+
+### The two limits you must be able to name
+
+**1. Stopping ≠ succeeding.** "No tool calls" is a *stop* condition. A model
+that gave up, got confused, or hallucinated success produces the exact same
+signal as one that genuinely finished. You have no verification. This is Q2 in
+the main doc and it's the most common follow-up on this topic.
+
+**2. The iteration cap is blunt.** `max_iterations: int = 30` (`agent.py:96`).
+It stops runaway loops, which is essential — without it, a model stuck in a
+retry cycle burns tokens until your budget is gone. But it also truncates
+legitimate long work with a vague message (`:253-254`). A cost/token budget
+would be smarter than a step count, because 30 cheap steps and 30 expensive ones
+are very different things.
+
+### Alternatives, and when each is better
+
+| Approach | Better when | Worse when |
+| --- | --- | --- |
+| **Single-shot** | Task is self-contained, no environment interaction | Anything needing feedback |
+| **Fixed pipeline / DAG** | Steps are known and stable; you want testability | Task space is open-ended |
+| **ReAct loop** (yours) | Environment is unpredictable, recovery matters | You need determinism or cost predictability |
+| **Tree search / multi-path** | Some paths dead-end and backtracking pays | Cost matters — it multiplies calls |
+
+The honest framing: if AURA only did Gmail and Calendar, a fixed pipeline would
+be the better engineering choice — testable, predictable, cheap. ReAct earns its
+complexity specifically because "operate an arbitrary GUI" has no enumerable set
+of states.
+
+---
