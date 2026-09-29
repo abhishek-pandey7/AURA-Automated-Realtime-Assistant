@@ -528,3 +528,132 @@ plans forever. So you'd need a replan budget. That's the kind of "here's the fix
 *and* what the fix costs" answer that lands well.
 
 ---
+
+## A5. Human-in-the-loop, allow-lists vs deny-lists, defence in depth
+
+### Human-in-the-loop (HITL)
+
+An automated system that pauses and asks a human to approve before taking
+certain actions. It exists because **automation is fast and confident, and both
+of those are bad when it's wrong.**
+
+AURA's version is `aura/confirm.py`: print a panel describing the action, read
+Y/N, return a bool. Every risky tool calls it *before* acting:
+
+| Tool | Line | Gated action |
+| --- | --- | --- |
+| `shell.run` | `shell.py:37` | Dangerous commands only |
+| `write_file` | `filesystem.py:103` | Always (with content preview) |
+| `patch_file` | `filesystem.py:123` | Always (with before/after preview) |
+| `delete_file` | `filesystem.py:153` | Always, `force=True` — unconditional |
+| `browser_*` | `browser.py:115` etc. | Navigation, clicks, fills |
+| `desktop_*` | `desktop.py:144` etc. | **Auto-approved** — see below |
+
+### Deny-lists vs allow-lists
+
+This distinction comes up constantly in security questions, so know it cold.
+
+A **deny-list** (blacklist) enumerates what's *forbidden*; everything else is
+allowed. An **allow-list** (whitelist) enumerates what's *permitted*; everything
+else is forbidden.
+
+Yours is a deny-list, `aura/config.py:28-32`:
+
+```python
+ALWAYS_CONFIRM_PATTERNS = [
+    "rm ", "rmdir", "sudo", "chmod", "chown",
+    "dd ", "mkfs", ":(){:|:&};:", "shutdown", "reboot",
+    "git push", "pip install", "npm install",
+]
+```
+
+matched by substring at `confirm.py:11`.
+
+**Allow-lists are strictly more secure, and the reason is structural, not about
+effort.** A deny-list has to anticipate every dangerous thing. An allow-list only
+has to anticipate every *safe* thing. The set of dangerous things is unbounded
+and adversaries add to it; the set of safe things is yours to define. **When you
+forget an entry, a deny-list fails open (dangerous thing allowed) and an
+allow-list fails closed (safe thing blocked).** Failing closed is an
+inconvenience; failing open is a breach.
+
+Your deny-list has a very concrete hole and you should name it before anyone
+else does: **`"rm "` does not match `Remove-Item`**, which is the native delete
+command on Windows — the platform this project actually targets. The deny-list
+has a gap shaped like the primary use case. It also doesn't survive trivial
+obfuscation: a tab instead of a space, `$(echo rm)`, a variable.
+
+So: it's a speed bump that catches honest mistakes. That has real value. It is
+**not a security boundary** and you shouldn't describe it as one.
+
+### Defence in depth
+
+The principle that you don't rely on a single control. If one layer fails,
+another catches it.
+
+Here's the part of your design that's genuinely good, and it's easy to miss:
+**confirmation is enforced inside each tool, not once in the agent loop.**
+
+```python
+# aura/tools/filesystem.py:102
+def write_file(path: str, content: str) -> str:
+    approved = confirm_write(path, preview=content)   # ← inside the tool
+    if not approved:
+        return "[ AURA ] File write cancelled by user."
+```
+
+Why this matters: if the check lived in `dispatch()` or in `run_agent()`, then
+*any* code path that called `filesystem.write_file` directly would bypass it. A
+future feature, a test helper, a refactor — any of them could route around the
+gate without anyone noticing. Putting it in the tool means **the check cannot be
+separated from the action.**
+
+Say it that way in an interview: *"I put the gate inside the tool rather than in
+the dispatcher specifically so no caller can route around it."*
+
+### The exception that undercuts it
+
+`aura/confirm.py:80-86`:
+
+```python
+def confirm_desktop(action: str, target: str) -> bool:
+    detail = f"Target: {target}"
+    if _is_dangerous(detail) or _is_dangerous(action):
+        return confirm_action(f"perform desktop action ({action})", detail, force=True)
+
+    # Bypass SAFE_MODE for safe desktop operations
+    console.print(f"  [dim]▶ Auto-approved desktop action: {action}[/dim]")
+    return True
+```
+
+Desktop actions auto-approve. It prints a dim line and returns `True`.
+
+The reasoning is obvious and legitimate: a desktop task is 30+ clicks, and 30
+Y/N prompts is an unusable feature. But the *result* is that synthetic mouse and
+keyboard events — which can click literally anything on your screen, including
+"confirm transfer" — are the **least** gated surface in the application. That's
+backwards from a risk standpoint.
+
+The better design, which you should offer: confirm **once per task** rather than
+once per action ("AURA wants desktop control for this subtask — Y/N"), plus a
+screen-region restriction, plus a kill switch. You have a crude kill switch
+already — `pyautogui.FAILSAFE = True` at `desktop.py:6` aborts if the mouse hits
+a screen corner — and that's probably why shipping this felt acceptable. It's
+not a substitute for a real gate.
+
+### Fail-open vs fail-closed
+
+Worth knowing as a phrase. When a security control errors out, does it let
+things through (**fail-open**) or block them (**fail-closed**)?
+
+`confirm.py:52-54` treats empty input as **No**:
+
+```python
+elif response in ("N", "NO", ""):
+```
+
+Press Enter without typing anything and the action is **cancelled**. That's
+fail-closed, and it's the right default — the safe outcome is the one you get by
+doing nothing.
+
+---
