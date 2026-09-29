@@ -612,3 +612,139 @@ observed."*
   after you add rule 15.
 
 ---
+
+## 3. Framework and tech-stack choices
+
+Be ready for "why X and not Y" on each of these. Note honestly up front: **this
+project has no database, no cache, no message queue, and no web framework**,
+because it's a local single-user CLI. Not having them is the correct design, and
+saying so confidently is better than pretending otherwise.
+
+### Python
+
+**Pros.** The only language where every capability you needed already exists as a
+mature library: `pyautogui` for input synthesis, `pynput` for hooks, `playwright`,
+`winsdk` for WinRT OCR, Google's API clients, the `openai` SDK. In any other
+language at least two of those would be a bindings project. Fast iteration for a
+hackathon-pace build.
+
+**Cons.** Startup latency (§2.2 — importing 13 modules pulls in heavy native
+deps). No static typing on the tool boundary, so `dispatch(**inputs)` failing is
+a runtime `TypeError` you handle by returning an error string
+(`tools/__init__.py:47`). Distribution is genuinely painful — hence
+`install.sh`/`install.bat` existing at all. The GIL would bite if you ever
+parallelised tool calls.
+
+**Alternative.** Go or Rust would give you a single static binary and real
+concurrency — which actually matters for a tool users must install. You'd be
+writing OCR and input bindings yourself. Wrong trade for this project.
+
+### OpenAI SDK against an OpenAI-compatible endpoint (not the OpenAI API)
+
+**Where:** `aura/config.py:12-14` — `INFERX_BASE_URL`, `INFERX_MODEL`, default
+`gemma-4-31b`. Client construction at `agent.py:21`, `planner.py:8`,
+`learning.py:83`.
+
+**This is your best architecture answer and you should volunteer it.** You used
+the OpenAI *SDK* as a protocol client, pointed at a self-hosted LiteLLM proxy
+serving an open-weight model. You get the de-facto-standard function-calling
+interface and a mature SDK, while the actual model is swappable by changing an
+environment variable. Model-agnostic by construction.
+
+**Pros.** Provider independence; no vendor lock-in. Function calling is the
+industry-standard shape, so tool schemas port. Open-weight models mean no
+per-token cost and data never leaves infrastructure you control — which for an
+agent that screenshots your desktop and reads your inbox is a substantive privacy
+argument, not a footnote. Make that point.
+
+**Cons.** You're bound to whatever the proxy implements. Smaller open models have
+weaker tool-use reliability, and your code is visibly shaped by that — the
+markdown-fence-tolerant JSON parsing at `agent.py:200-210` and the same in
+`planner.py:73-78` exist because the model wrapped tool arguments in code fences.
+That's compensating for model weakness in the harness. Self-hosting means you own
+the uptime, which is exactly why §2.5's retry logic exists. And you can't use
+provider-specific features — no prompt caching, which would materially cut cost
+given a 70-line system prompt resent every iteration.
+
+**Alternatives.** *Anthropic or OpenAI APIs directly* — better tool-use
+reliability and prompt caching, at per-token cost and with lock-in. *LangChain /
+LlamaIndex* — you'd have got the agent loop, tool abstraction, and memory for
+free. But you'd have given up understanding of your own control flow, and for an
+interview the fact that you hand-rolled the ReAct loop is worth much more than
+having used a framework. Say that: *"I wrote the loop myself specifically so I'd
+understand it."*
+
+### Rich (terminal UI)
+
+**Where:** `aura/ui.py`, plus per-tool colour-coding in `agent.py:258-276`.
+
+**Pros.** For an agent that runs 30 opaque steps, legibility *is* trust. Panels,
+the live "AURA is thinking" spinner (`agent.py:113`), colour per tool type,
+output truncated to 25 lines with a "... N more lines hidden" marker
+(`agent.py:313-328`) — all of that is what makes autonomous execution followable.
+Cheap to add.
+
+**Cons.** Markup is embedded in logic strings, so presentation and behaviour are
+tangled — `confirm.py` mixes Rich markup into the same functions that make the
+security decision. Output isn't machine-parseable, which blocks scripting AURA
+into a pipeline. `console.input()` gives you no readline: no history, no
+tab-completion, no arrow keys in the REPL — noticeable for a tool you type into
+all day.
+
+**Alternatives.** *`prompt_toolkit`* would fix the input side (history,
+completion) — arguably the bigger win for a REPL. *Textual* for a full TUI with
+panes; overkill. *Plain print* — you'd lose the legibility that makes the agent
+trustworthy.
+
+### Playwright (browser) over Selenium
+
+**Where:** `aura/tools/browser.py`.
+
+**Pros.** Auto-waiting, so you don't hand-write sleeps. `connect_over_cdp`
+(`:89`) lets you attach to the user's *already-running* Chrome, and
+`launch_persistent_context` with a real `user_data_dir` (`:97-102`) gives you
+their cookies and logins — which is the entire reason browser automation is
+useful here, versus a clean profile that's logged into nothing. Bundled browsers,
+no driver-version hell.
+
+**Cons.** Heavy install (`playwright install` downloads browsers). The
+`sync_playwright` API is awkward to hold alongside anything async. Profile
+locking is a real failure mode you had to handle — Chrome can't have two
+processes on one profile dir, hence the three-tier fallback and that apologetic
+message at `:107`.
+
+**Alternatives.** *Selenium* — more ubiquitous, worse ergonomics, manual waits,
+driver management. *`requests` + BeautifulSoup*, which you also have in
+`tools/web.py` — right for static pages and much cheaper, wrong for anything
+JS-rendered or authenticated. Having both tiers is the correct answer and worth
+framing that way: cheap HTTP first, real browser when you need a real browser.
+
+### JSON files for state (no database)
+
+**Where:** `~/.aura/sessions/*.json` (`memory.py`), `user_profile.json`
+(`forms.py:19`), `token.json` (OAuth cache).
+
+**Pros.** Zero dependencies, zero schema migrations, human-readable and diffable
+during debugging, trivially backed up. Correct for single-user single-writer
+append-only data.
+
+**Cons.** No atomicity (§2.6), no concurrent access, no query capability, and
+O(n) rewrites. `user_profile.json` holds PII in plaintext. `token.json` holds a
+live OAuth refresh token in plaintext in the project directory — gitignored,
+which is right, but still a credential sitting on disk unencrypted.
+
+**Alternatives.** *SQLite* — right call the moment you want cross-session search
+or long-term memory, and it ships with Python. *A vector DB* (Chroma, FAISS) for
+semantic recall over past sessions, which your README lists as future work and is
+the natural next step. *Postgres / anything networked* — wrong; there's no
+server.
+
+### No web framework, no queue, no cache, no load balancer
+
+Say this plainly and don't apologise for it: *"AURA is a local process with one
+user. The LLM endpoint is the only network dependency, and it's already behind a
+proxy. Adding a queue or a cache would be architecture cosplay — there's no
+concurrency to manage and nothing to fan out."* Then immediately pivot to
+section 4, which is where those concepts legitimately enter.
+
+---
