@@ -1049,3 +1049,153 @@ which is precisely where OCR still wins. The realistic answer is both: a11y tree
 when available, OCR when not.
 
 ---
+
+## A9. Runtime code generation & imitation learning
+
+### The idea
+
+Some tasks can't be automated by API because there is no API, and can't be
+automated by OCR navigation because the UI is too idiosyncratic. The remaining
+option: **have the user demonstrate it once, and generate code from the
+demonstration.**
+
+That's imitation learning in the loosest sense — learning a behaviour from
+observed examples rather than from a specification.
+
+### The pipeline
+
+```
+ aura learn "check my bank balance"
+        │
+        ▼
+ ┌──────────────┐  pynput hooks the OS input stream
+ │  RECORD      │  → "T+2.3s: Clicked left at (450, 210)"
+ │ learning.py  │  → "T+3.1s: Typed 'a'" ...
+ │   :45-70     │  + screenshot before, screenshot after
+ └──────────────┘
+        │
+        ▼
+ ┌──────────────┐  trace + both images → vision model
+ │  GENERATE    │  prompt: "write a self-contained module with
+ │   :82-130    │           TOOL_DEFS + a pyautogui function"
+ └──────────────┘
+        │
+        ▼
+ ┌──────────────┐  strip fences, regex the function name,
+ │  INSTALL     │  write aura/tools/<name>.py,
+ │  :145-166    │  call _init_tools() → live immediately
+ └──────────────┘
+```
+
+### Why an LLM is in the loop at all
+
+This is the question worth having a crisp answer for, because "why not just
+replay the recording?" is the obvious challenge.
+
+A raw macro replay is **more faithful and fully deterministic** — it does exactly
+what you did. But it hardcodes everything, including the literal characters you
+typed. It cannot generalise.
+
+The LLM's job is **abstraction**: turning a specific trace into a parameterised
+function. And you have proof it worked — `jiohotstar.py:23`:
+
+```python
+def jiohotstar_play(query: str) -> str:
+```
+
+The recording contained you typing one specific show name, character by
+character. The generated tool takes `query` as a **parameter** and does
+`pyautogui.write(query, interval=0.05)` (`:46`). Thirty individual keystroke
+events in the trace became one parameterised call. That generalisation is
+entirely the model's contribution, and it's the whole justification for the
+approach.
+
+### The security property — say this before they ask
+
+```python
+file_path.write_text(code, encoding="utf-8")   # learning.py:165
+aura.tools._init_tools()                       # :166  → imports it
+```
+
+**Model output is written to disk as Python and then imported and executed, with
+no review of any kind.** No diff shown to the user, no `ast.parse`, no sandbox.
+Module-level code in that file runs at import; the function runs on the next
+dispatch. All with your user's permissions.
+
+This is the most serious security property in the project. The right posture in
+an interview is to raise it yourself, in plain terms, along with the fix ladder:
+
+1. **Show the code and ask Y/N.** You already have exactly this pattern —
+   `confirm_write` at `confirm.py:60` shows a preview and asks. It's *inconsistent*
+   that ordinary file writes are gated and codegen isn't. That inconsistency is
+   the interesting part: it means you weren't thinking of the codegen path as a
+   write at all.
+2. **AST allow-list.** Parse the generated module with `ast.parse` and reject
+   anything outside a permitted set. A recorded GUI macro should only ever need
+   `time` and `pyautogui` — so an `import subprocess`, an `open()`, or an
+   `eval` is mechanically rejectable. Cheap and high value.
+3. **Sandbox execution.** The real answer, and the expensive one. See B8.
+
+### The brittleness — and the fix that makes this feature good
+
+Look at what actually got generated,
+`check_bitcoin_price_coinmarketcap.py:22-33`:
+
+```python
+pyautogui.press('cmd')           # ← wrong key for Windows
+time.sleep(1.5)
+pyautogui.click(1287, 1052)      # ← frozen pixel coordinate
+time.sleep(0.5)
+pyautogui.write('coinmarketcap.com')
+pyautogui.press('enter')
+time.sleep(5.0)                  # ← a guess, not a wait
+```
+
+Three distinct problems:
+
+- **Frozen coordinates.** `click(1287, 1052)` breaks on a different resolution, a
+  moved window, or a changed page layout. Nothing about it is robust.
+- **Wrong platform assumption.** `press('cmd')` is the macOS key. This is a
+  Windows project. The model got it wrong and nothing caught it.
+- **`time.sleep()` as synchronisation.** Sleeping 5 seconds and hoping the page
+  loaded is a race condition. Sometimes it's too short (fails), usually it's too
+  long (slow). It is not a wait — a wait checks a condition.
+
+**And here's the fix that ties the whole project together, which is why it's
+your best "what's next" answer:** you already built a perception layer.
+`desktop_find_text("Search")` returns live coordinates *at run time*. If the
+code generator emitted **OCR anchors instead of pixel coordinates** —
+
+```python
+# instead of:  pyautogui.click(1287, 1052)
+# emit:        loc = desktop_find_text("Search"); click there
+```
+
+— then generated tools would relocate their targets on every run, surviving
+window moves and resolution changes entirely. Same recording, durable output.
+
+It's mostly a prompt change (tell the generator what to emit) plus a helper
+function. Not a rewrite. That's the single change that would take
+watch-and-learn from impressive demo to genuinely useful, and being able to name
+it precisely is worth a lot.
+
+### The fragile parsing
+
+`learning.py:145-158` strips markdown fences by hand and then:
+
+```python
+match = re.search(r'def\s+([a-zA-Z0-9_]+)\(', code)
+tool_name = match.group(1)
+```
+
+The tool name is taken from **the first `def` in the file** — by regex. If the
+model emits a helper function first, you get the helper's name, the file is
+saved under the wrong name, and the registry's name-matching convention (§A3)
+silently fails to bind it.
+
+The robust version is to `ast.parse` the code and find the function whose name
+matches the name declared in the generated `TOOL_DEFS` — which also validates the
+one invariant the registry actually requires. Same parse pass gives you the
+security check from the fix ladder above. Two birds.
+
+---
