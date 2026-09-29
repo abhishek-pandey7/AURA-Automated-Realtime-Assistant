@@ -1602,3 +1602,19 @@ iterations, tokens, or concurrent sessions.
 UX than one that's uniformly slow — it stalls in an unfinished state, which is a
 confusing thing for a user to look at. You'd want limiting at *session admission*
 (refuse to start) rather than mid-loop where possible.
+
+## B5. CDNs
+
+**What it is.** Content Delivery Network — copies of static assets cached at
+servers geographically near users, so a request travels 50km instead of 5,000.
+Cuts latency and takes load off the origin.
+
+**Where it applies to AURA: nowhere, and say so directly.** There are no static
+assets, no web frontend, no geographic distribution of users. There is one
+process on one laptop.
+
+If you built the web dashboard from your README roadmap, a CDN would serve its
+JS and CSS. That's the entire answer. Don't manufacture more — confidently
+saying "not applicable, and here's the only scenario where it would be" is the
+right response, and pretending otherwise is exactly the failure mode this
+question is designed to detect.
