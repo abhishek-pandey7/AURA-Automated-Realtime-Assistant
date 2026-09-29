@@ -1374,3 +1374,124 @@ That's the number behind Axis 2 of §4 in the main doc: at 300 tools it becomes
 untenable, and the fix is retrieval over tools (see B6).
 
 ---
+
+## A12. OAuth 2.0, the way you actually used it
+
+### The problem OAuth solves
+
+You want AURA to send email as you. The naive approach — store your Gmail
+password — is terrible: the app gets unlimited access forever, revoking it means
+changing your password, and any breach exposes the credential itself.
+
+**OAuth 2.0** replaces that with delegated, scoped, revocable access. You
+authenticate with *Google*, not with AURA. Google hands AURA a **token** that
+grants specific permissions and can be revoked independently.
+
+### The flow in your code
+
+You're using the **Installed Application** flow (also called the desktop flow),
+`gmail.py:102-103`:
+
+```python
+flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+creds = flow.run_local_server(port=0)
+```
+
+What actually happens:
+
+1. `credentials.json` identifies **the app** (client id/secret from Google Cloud
+   Console). It's not a user credential.
+2. `run_local_server(port=0)` spins up a temporary local HTTP server on a random
+   free port and opens your browser to Google's consent screen.
+3. You log in *to Google* and approve the requested scopes. AURA never sees your
+   password.
+4. Google redirects back to that local server with an authorisation code, which
+   is exchanged for tokens.
+5. Tokens are written to `token.json` (`:105-106`). Next run reuses them — the
+   browser flow happens **once**.
+
+### Access tokens vs refresh tokens
+
+Two different things and interviewers do ask.
+
+- **Access token** — short-lived (typically ~1 hour), sent with each API call.
+  Short-lived deliberately: a leaked one expires fast.
+- **Refresh token** — long-lived, used only to obtain new access tokens without
+  re-prompting the user. This is the sensitive one.
+
+`gmail.py:88-90`:
+
+```python
+if not creds or not creds.valid:
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+```
+
+Access token expired but a refresh token is present → refresh silently. Only if
+that's impossible do you fall back to the full browser flow. That's why AURA
+asks you to log in once and never again.
+
+### Scopes — least privilege
+
+**Scopes** are the specific permissions requested. `gmail.py:15-19`:
+
+```python
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar",
+]
+```
+
+Note `gmail.send` and `gmail.readonly` rather than full `https://mail.google.com/`.
+That's **least privilege** — request the narrowest permission that does the job,
+so a compromised token does less damage. Worth pointing out; it's the kind of
+detail that signals you understand *why* scopes exist rather than just copying a
+sample.
+
+### The live bug — know this one
+
+The three Google modules declare **different scope lists**:
+
+| File | Line | Scopes declared |
+| --- | --- | --- |
+| `gmail.py` | `:15` | gmail.send, gmail.readonly, calendar |
+| `meet.py` | `:17` | calendar, gmail.send, gmail.readonly |
+| **`calendar.py`** | **`:17`** | **calendar only** |
+
+All three read and write **the same `token.json`**. And
+`Credentials.from_authorized_user_file(token_path, SCOPES)` is passed whichever
+list the calling module happens to declare.
+
+So: if `calendar.py` is what triggers the initial OAuth flow, the token is
+minted with calendar scope only — and a later `gmail_send` fails with a scope
+error. If `gmail.py` goes first, everything works. **Behaviour depends on which
+tool the user happens to invoke first**, which is exactly the kind of bug that
+only reproduces for a brand-new user and therefore never reproduced for you.
+
+The fix: one `aura/google_auth.py` with a single superset scope list, imported by
+all three. That also removes the ~35 lines of near-identical `_get_service()`
+duplication.
+
+This is a strong thing to raise unprompted, because finding a real ordering-
+dependent bug in your own code — and explaining *why* you wouldn't have hit it —
+demonstrates genuine analysis rather than rehearsed talking points.
+
+### Token storage
+
+`token.json` sits unencrypted in the project root. It's gitignored (correctly —
+check `.gitignore`), but it's a live refresh token in plaintext on disk. Anyone
+with filesystem access has your Gmail and Calendar.
+
+For a local single-user tool that's a defensible trade (it's the same threat
+model as your browser's cookie store). For anything hosted, it isn't — see B8
+and the multi-user section of the main doc.
+
+---
+
+# Part B — Concepts that aren't in your code
+
+You did not use these. **That's correct** — AURA is a local single-user CLI and
+adding them would be architecture for its own sake. But interviewers will raise
+them, and "we didn't need that, here's why, and here's exactly when I would"
+is a much stronger answer than a blank look or a made-up justification.
