@@ -316,3 +316,121 @@ complexity specifically because "operate an arbitrary GUI" has no enumerable set
 of states.
 
 ---
+
+## A3. Plugin registry & convention over configuration
+
+### The problem it solves
+
+You have 13 tool modules and want to add a 14th. The naive approach is a central
+list:
+
+```python
+from aura.tools import shell, web, filesystem, gmail, ...   # edit this
+ALL_TOOLS = [shell.TOOL_DEF, *web.TOOL_DEFS, ...]           # and this
+DISPATCH = {"bash": shell.run, "web_fetch": web.web_fetch, ...}  # and this
+```
+
+Three places to edit for every new tool, and every one is a place to forget.
+
+A **plugin registry** inverts it: the system *discovers* its own components at
+startup instead of being told about them.
+
+### Convention over configuration
+
+The idea that a component declares itself by **following a naming rule** rather
+than by being registered somewhere. Your convention, from
+`aura/tools/__init__.py:21-33`:
+
+> A module in `aura/tools/` is a tool provider if it exposes `TOOL_DEFS` (a list
+> of JSON schemas) or `TOOL_DEF` (a single one). For each schema, the
+> implementation is the module-level function whose name equals
+> `schema["function"]["name"]`.
+
+Follow that and you exist. No registration call, no import line, no dict entry.
+
+### How the discovery works
+
+```python
+pkg_dir = Path(__file__).resolve().parent
+for _, module_name, ispkg in pkgutil.iter_modules([str(pkg_dir)]):
+    if ispkg: continue
+    module = importlib.import_module(f"aura.tools.{module_name}")
+```
+
+Two standard-library pieces:
+
+- **`pkgutil.iter_modules([dir])`** — lists every importable module in a
+  directory. This is *filesystem* inspection, not code inspection: it finds
+  files that exist right now, which is the whole point.
+- **`importlib.import_module(name)`** — imports a module by *string name*
+  computed at runtime, rather than by a static `import x` statement. That's what
+  makes it possible to import a file that didn't exist when the program started.
+
+Then the schemas go in `ALL_TOOL_DEFS` (which is what `agent.py:125` sends to
+the model) and the functions go in `_dispatch_map` (which is what `dispatch()`
+at `:41` looks up).
+
+### Why this is load-bearing, not decorative
+
+This is the point to hammer if someone asks "why not just use a dict?"
+
+`aura/learning.py:162-166`:
+
+```python
+file_path = tools_dir / f"{tool_name}.py"
+file_path.write_text(code, encoding="utf-8")
+aura.tools._init_tools()          # ← re-scan
+```
+
+AURA **writes a new Python file into its own tools directory while running**,
+then re-runs discovery. The new tool is available on the very next iteration, in
+the same process, with no restart.
+
+A static dict cannot do that. You'd have to edit source and relaunch. So the
+registry isn't a style preference — the self-extension feature is impossible
+without it. That's a much stronger answer than "it's cleaner."
+
+### The cost, which is real
+
+`aura/tools/__init__.py:36-37`:
+
+```python
+except Exception:
+    pass # Ignore broken generated tools on startup
+```
+
+Every import error — a typo, a missing dependency, a Windows-only import on
+Linux — is silently swallowed. The tool simply doesn't exist, with no message
+anywhere. The *intent* is right (one bad generated tool shouldn't stop AURA
+booting) but silence is the wrong implementation. Catch, **log the module name
+and the exception**, continue. Same resilience, actual observability.
+
+This is genuinely the best five-line fix in the codebase and saying so shows
+judgement about where effort pays off.
+
+### The other trade-off: implicit contracts break quietly
+
+The "function name must match schema name" rule lives nowhere but in code — and
+you already needed an exception to it at `:34`:
+
+```python
+elif module_name == "shell" and tool_name == "bash":
+    _dispatch_map[tool_name] = getattr(module, "run")
+```
+
+`shell.py` exposes `run`, but the tool is called `bash`. One special case,
+hardcoded. That's evidence the convention was slightly too tight — a cleaner
+design would let a module declare the mapping explicitly (e.g. an optional
+`TOOL_IMPL = {"bash": run}`) rather than special-casing one module by name.
+
+### When a plugin registry is the wrong call
+
+- **When the set is fixed and small.** A dict is clearer and statically
+  analysable. Your IDE can follow it; it can't follow `importlib`.
+- **When you need startup guarantees.** Auto-discovery means you learn about a
+  broken component at *use* time, not boot time.
+- **When plugins are untrusted.** Auto-importing whatever is in a directory
+  means auto-executing whatever is in a directory — module-level code runs on
+  import. Combined with A9, that's the security story of this project.
+
+---
