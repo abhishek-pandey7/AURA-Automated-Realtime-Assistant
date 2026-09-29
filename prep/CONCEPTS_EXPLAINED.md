@@ -1296,3 +1296,81 @@ apart. Point at both — it's a good illustration of the difference between desi
 thinking and debugging residue, and owning that distinction reads well.
 
 ---
+
+## A11. Prompt-as-configuration
+
+### The idea
+
+In a normal program, behaviour lives in control flow — `if`, `for`, function
+calls. In an LLM system, a large part of behaviour lives in **prose**. The
+system prompt is configuration: it's where policy is written.
+
+`aura/agent.py:27-93` is ~70 lines of this, templated at runtime with live
+environment facts (`:106`):
+
+```python
+system = SYSTEM_PROMPT.format(cwd=cwd, now=now, os_name=os_name, shell=shell)
+```
+
+### Injecting environment facts — a small, clever thing
+
+Look at what gets templated in: OS, shell, current working directory, and
+**current date/time**. Then this rule at `:57-59`:
+
+> CRITICAL DATE RULE:
+> - You already know the current date and time from the system info above. NEVER
+>   call bash just to get the date.
+
+Without that, the model would burn a whole iteration — an API round trip, a
+subprocess spawn, tokens — to learn something you could have simply told it.
+**Putting known facts in the prompt eliminates entire classes of tool call.**
+That's a concrete, cheap optimisation and a good detail to mention.
+
+### The CRITICAL rules are a changelog of bugs
+
+Read them as history rather than as documentation:
+
+| Rule | The failure it's responding to |
+| --- | --- |
+| `:62` "NEVER use smtplib, yagmail" | The model wrote SMTP scripts instead of using `gmail_send` |
+| `:58` "NEVER call bash just to get the date" | It shelled out for `date` |
+| `:45` "use PowerShell syntax, NOT `date +%Y-%m-%d`" | It emitted Unix commands on Windows |
+| `:69` "NEVER create a Meet via browser tools" | It tried to automate the Meet UI instead of calling the API |
+| `:86` "PERCEPTION FIRST" | It guessed coordinates instead of reading the screen |
+
+Every one is something you watched go wrong. Say it exactly that way in an
+interview: *"those rules are a changelog of failures I observed."* It's honest,
+it's specific, and it shows the prompt was developed empirically rather than
+written once and forgotten.
+
+### Prompts vs code — the real trade-off
+
+| | Prompt rule | Code enforcement |
+| --- | --- | --- |
+| **Strength** | A strong suggestion | An absolute guarantee |
+| **Cost to write** | One line of English | A real implementation |
+| **Cost to run** | Tokens, on every single call | Effectively zero |
+| **Testable?** | Not really | Yes, trivially |
+| **Failure mode** | Model ignores it, silently | Fails loudly and predictably |
+
+The smtplib rule is the clean example. As a prompt rule it costs ~20 tokens per
+call and the model *usually* complies. As a code check in `dispatch()` —
+"reject any `bash` call whose command contains `smtplib`" — it's free at runtime
+and **cannot** be violated. But it's more brittle to write and it fails closed in
+ways that might surprise a user with a legitimate reason to use smtplib.
+
+The honest summary: prompt rules were the fastest available lever, they're
+unenforced, and the ones that matter most should eventually migrate into code.
+
+### The token cost, quantified
+
+The system prompt is ~70 lines (~900 tokens), and **every tool schema goes in
+every request** (`agent.py:125`). With 30-plus tools at roughly 100 tokens of
+schema each, that's ~3,000 more. So roughly **4,000 tokens of fixed overhead
+before the conversation even starts** — paid on every iteration of every task,
+including "read this one file."
+
+That's the number behind Axis 2 of §4 in the main doc: at 300 tools it becomes
+untenable, and the fix is retrieval over tools (see B6).
+
+---
