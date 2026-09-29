@@ -893,3 +893,200 @@ filtering, and per-tenant resource caps — before it could responsibly accept a
 single external user. Naming this yourself is much stronger than being told.
 
 ---
+
+## 5. Weak spots an interviewer will poke at
+
+> Ordered roughly by how fast someone reading the code will find them. For each:
+> the honest answer. Not a deflection — an acknowledgement plus the fix. Taking
+> ownership of a real flaw reads as senior; defending it reads as junior.
+
+### 5.1 Hardcoded absolute path with your username in it
+
+`aura/tools/browser.py:85`:
+`user_data_dir = r"C:\Users\Abhishek Pandey\AppData\Local\Google\Chrome\User Data"`
+
+**They will find this.** It's the most obviously wrong line in the repo.
+
+> Yeah, that's a straight-up bug — it works on exactly one machine. It should be
+> `Path.home() / "AppData/Local/Google/Chrome/User Data"` with a per-platform
+> branch, ideally overridable by an env var like everything else in
+> `config.py`. It got hardcoded while I was debugging Chrome profile locking and
+> never came back out, which is a process failure as much as a code one — I
+> didn't have a check that would have caught it, because I only ever ran it on
+> this machine. It's a two-line fix and it's the first thing on my list.
+
+Don't over-apologise. One sentence of ownership, the fix, the root cause, move
+on.
+
+### 5.2 Executing LLM-generated code with no review or sandbox
+
+`aura/learning.py:165` writes model output straight to a `.py` file inside the
+tools package, then `:166` imports it.
+
+> This is the sharpest security edge in the project and I want to name it before
+> you do. A compromised or simply confused model can write arbitrary Python into
+> my tools directory and it runs as me on the next dispatch. Three things are
+> missing: I don't show the user the generated code before writing it, I don't
+> `ast.parse` it to at least reject syntactically-invalid or obviously dangerous
+> constructs, and there's no sandbox. The minimum viable fix is a diff shown in
+> the terminal with a Y/N — which is exactly the pattern I already use in
+> `confirm.py` for file writes, so it's inconsistent that codegen doesn't go
+> through it. The real fix is an AST allow-list: for a generated macro, the only
+> imports it should ever need are `time` and `pyautogui`, so anything else is a
+> red flag I can reject mechanically.
+
+### 5.3 `except Exception: pass` swallows every tool import error
+
+`aura/tools/__init__.py:36-37`. Comment says "Ignore broken generated tools on
+startup."
+
+> The intent was resilience — one bad generated tool shouldn't stop AURA booting
+> — and I stand by the intent. The implementation is wrong because it's silent.
+> If a tool has a typo it simply doesn't exist, with no message, and I've
+> debugged that confusion myself. It should catch, log the module name and
+> exception at warning level, and continue. Same resilience, actual
+> observability. This one's maybe five lines and it's the highest
+> value-per-line fix in the codebase.
+
+### 5.4 The safety deny-list is bypassable, and it's the wrong list for Windows
+
+`aura/config.py:28-32`, matched by substring at `confirm.py:11`.
+
+> Substring matching on command text is a weak control and I'd rather say that
+> than defend it. `"rm "` doesn't catch `Remove-Item`, which is the *native*
+> spelling on the platform this project actually targets — so the deny-list has a
+> hole shaped like the primary use case. It also doesn't survive any
+> obfuscation: a tab instead of a space, or `$(echo rm)`, walks right through.
+>
+> What I'd actually change: stop trying to classify command *strings*. Either
+> allow-list the specific operations the agent may perform and route everything
+> else through confirmation, or run shell commands in a container where the
+> blast radius is bounded regardless of what the string says. The deny-list is a
+> speed bump that catches honest mistakes, which has some value — it's just not
+> a security boundary, and I shouldn't describe it as one.
+
+### 5.5 Desktop actions auto-approve, bypassing SAFE_MODE
+
+`aura/confirm.py:80-86` — `confirm_desktop` prints a line and returns `True`.
+
+> That's a deliberate usability decision with a security cost, and I'd rather
+> explain the reasoning than pretend it's an accident. A desktop task is 30-plus
+> clicks; 30 Y/N prompts makes the feature unusable, so I traded the gate for
+> flow. But the result is that the most dangerous surface in the app — synthetic
+> mouse and keyboard events that can click anything on my screen — is the least
+> gated, which is backwards.
+>
+> Better design: confirm once per *task* rather than per *action* — "AURA wants
+> desktop control for this subtask, Y/N" — plus a screen-region allow-list, plus
+> a global kill switch. `pyautogui.FAILSAFE` at `desktop.py:6` gives me a crude
+> version of that last one already (slam the mouse into a corner to abort), which
+> is why I was comfortable shipping it, but it's not a substitute.
+
+### 5.6 The plan is computed once and never revised
+
+§2.3. `plan()` runs before any execution; every subtask runs as written.
+
+> This is the design critique I find most interesting, actually. The planner has
+> zero information about the environment — it's guessing from the goal string
+> alone. So if subtask two discovers the plan was wrong, three through five still
+> execute as written.
+>
+> Two things partially save it: the executor loop within each subtask is fully
+> adaptive, so local recovery works well, and all subtasks share one `Memory`
+> object, so later ones can at least see what earlier ones did. But there's no
+> mechanism to *discard* a remaining plan. Proper fix is replanning after each
+> subtask with results fed back — which introduces oscillation risk, so it needs
+> a replan budget. **[confirm with me]** whether you consciously deferred this or
+> it just didn't come up.
+
+### 5.7 `requirements.txt` contradicts `pyproject.toml`
+
+`requirements.txt` contains `streamlit`, `scikit-learn`, `joblib` — none of which
+appear anywhere in `aura/`. The real dependencies are in `pyproject.toml`.
+
+> Leftover from an earlier direction and it should be deleted. It's actively
+> harmful: someone doing `pip install -r requirements.txt` gets three packages
+> the project doesn't use and none of the seventeen it needs. `pyproject.toml` is
+> the single source of truth. Housekeeping, but the kind that makes a repo look
+> untended.
+
+Also delete the stray `math_test.py` and `run_script.py` in the project root
+before anyone clones this — they're currently untracked scratch files.
+
+### 5.8 Three copies of the same OAuth code, with inconsistent scopes
+
+`_get_service()` in `gmail.py:74`, `calendar.py:92`, `_get_creds()` in
+`meet.py:79`. Near-identical. And the scope lists differ: `calendar.py:17` asks
+for calendar only, while `gmail.py:15` and `meet.py:17` ask for all three.
+
+> Copy-paste that should be one `aura/google_auth.py`. The duplication isn't just
+> ugly — the divergent `SCOPES` lists are a live bug. All three read and write
+> the same `token.json`, and `Credentials.from_authorized_user_file` is passed
+> whichever scope list the calling module happens to declare. Whichever module
+> triggers the OAuth flow first determines what's actually in the token, so
+> ordering changes behaviour. That's exactly the class of bug that only shows up
+> for a fresh user, which is how I'd have missed it. One auth module, one
+> superset scope list, done.
+
+### 5.9 The test suite isn't a test suite
+
+`tests/test_tools.py` is a script with a hand-rolled `test()` helper, prints, and
+`sys.exit()` at module scope. It runs at import. Real network calls to
+`httpbin.org` and DuckDuckGo (`:105`, `:116`). Unix commands (`sleep 5`, `ls`,
+`/tmp` paths) on a Windows-first project, so several tests fail by construction.
+Nothing covers `agent.py`, `planner.py`, `learning.py`, or `confirm.py` — the
+actual logic.
+
+> This is where I'd push back hardest on my own work. It's a smoke-test script,
+> not a test suite, and it tests the easy 20% — the pure functions — while the
+> agent loop, the planner, the confirmation gate, and the code generator have
+> zero coverage.
+>
+> Concretely: port it to pytest so I get fixtures, parametrisation and real
+> assertions; mock the LLM client so I can test the agent loop deterministically
+> (does it terminate on no-tool-calls, does it cap at max_iterations, does it
+> retry on a 502 and not on a 401); mock the network instead of hitting
+> httpbin so the suite works offline and doesn't flake; and fix the Unix-isms.
+> The loop is the highest-risk code in the project and it's the least tested,
+> which is exactly the wrong way round.
+
+### 5.10 Generated tools are committed and permanently brittle
+
+`check_bitcoin_price_coinmarketcap.py:27` — `pyautogui.click(1287, 1052)`. Also
+`pyautogui.press('cmd')` on Windows (`:23`), and `time.sleep(5.0)` as
+synchronisation.
+
+> These are artefacts, not code I'd hand-write, and committing them was arguably
+> a mistake — though I'd argue they're useful as evidence the pipeline works.
+> They demonstrate the exact limitation I described: the generator emits raw
+> pixel coordinates, so they break on any resolution or layout change, and the
+> model got the platform modifier key wrong.
+>
+> The fix I actually want is to change what the generator *emits*: instead of
+> `click(1287, 1052)`, have it emit `desktop_find_text("Search") → click there`,
+> so generated tools use the OCR perception layer I already built rather than
+> frozen pixels. Same recording, semantic output. That's the single change that
+> would make watch-and-learn production-quality, and it's a prompt change plus a
+> helper, not a rewrite.
+
+### 5.11 Other things worth having an answer ready for
+
+- **`close_browser()` is never called** (`browser.py:211`). Playwright leaks
+  until process exit. Needs an `atexit` hook or REPL shutdown handling.
+- **No structured logging anywhere.** Everything is `console.print`. No way to
+  debug a user's failed run post-hoc. Add `logging` with a session-scoped file
+  handler.
+- **`datetime.utcnow()`** at `calendar.py:132` and `:212` is deprecated in modern
+  Python; should be `datetime.now(datetime.UTC)`.
+- **Timezone `Asia/Kolkata` is hardcoded** in `calendar.py:170` and
+  `meet.py:164`, and also asserted in the system prompt (`agent.py:32`). Should
+  come from config or the system.
+- **`ui.py:124` lowercases the whole command line** before dispatch, so
+  `/learn Check My Balance` loses its casing — a latent bug in the `/learn` path.
+- **PII in plaintext** — `user_profile.json` holds name, phone, address, DOB
+  unencrypted. Gitignored, which is right, but unencrypted at rest.
+- **No cost or token accounting.** Nothing tracks tokens per task, so you can't
+  answer "what did that cost" — and for an agent that loops 30 times, you should
+  be able to.
+
+---
