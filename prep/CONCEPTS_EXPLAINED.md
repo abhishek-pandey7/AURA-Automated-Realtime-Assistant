@@ -780,3 +780,135 @@ call, so even a tool that forgets to handle its own errors can't take down the
 agent.
 
 ---
+
+## A7. Persistence: write-through, atomicity, write amplification
+
+### Write-through vs write-back
+
+Two strategies for when to put data on disk.
+
+- **Write-back** (or write-behind): keep changes in memory, flush later — at
+  exit, on a timer, when a buffer fills. Fast, fewer disk operations. **You lose
+  everything since the last flush if the process dies.**
+- **Write-through**: every change goes to disk immediately. Slower, more I/O.
+  **Nothing is ever lost.**
+
+AURA is write-through. `memory.py:_save()` is called from `add_user` (`:33`),
+`add_assistant` (`:38`), and directly from the agent after every tool batch
+(`agent.py:189`, `:251`).
+
+**Why that's the right call here:** an agent that controls a desktop gets killed
+*constantly*. A misclick, Ctrl-C, the FAILSAFE corner trip, a tool that hangs.
+Crashing mid-task is the normal case, not the exception. Write-back would lose
+the transcript exactly when you most want to read it.
+
+### Atomicity — the bug in this code
+
+An operation is **atomic** if it either fully happens or doesn't happen at all.
+There's no observable halfway state.
+
+`memory.py:49-56` is **not** atomic:
+
+```python
+def _save(self):
+    path = SESSIONS_DIR / f"{self.session_id}.json"
+    with open(path, "w") as f:                    # ← truncates the file NOW
+        json.dump({...}, f, indent=2)             # ← then writes
+```
+
+`open(path, "w")` **empties the file immediately**, before a single byte of new
+content is written. If the process dies in that window — Ctrl-C at the wrong
+millisecond, power loss — the session file is left truncated or half-written.
+And `_load()` at `:58` will throw a `JSONDecodeError`, so the session is
+unrecoverable.
+
+The standard fix is **write-to-temp-then-rename**:
+
+```python
+tmp = path.with_suffix(".tmp")
+with open(tmp, "w") as f:
+    json.dump({...}, f, indent=2)
+os.replace(tmp, path)     # atomic on POSIX and on Windows
+```
+
+`os.replace` is atomic at the filesystem level: the path points at either the
+complete old file or the complete new one, never at a partial one. Two lines.
+Know this fix — "how would you make a file write crash-safe" is a common
+question and this is the textbook answer.
+
+### Write amplification
+
+Writing far more bytes than the logical change requires.
+
+Your `_save()` re-serialises **the entire message list** on every append. So:
+
+```
+message 1  → write 1 message
+message 2  → write 2 messages
+message 3  → write 3 messages
+...
+message n  → write n messages
+             ─────────────────
+  total:     1+2+3+...+n = n(n+1)/2  →  O(n²)
+```
+
+Appending one message costs time proportional to everything written so far. With
+50 messages containing base64 screenshots, you're rewriting megabytes, dozens of
+times.
+
+**The fix is an append-only log** — JSONL, one JSON object per line:
+
+```python
+with open(path, "a") as f:
+    f.write(json.dumps(message) + "\n")    # O(1) per message
+```
+
+The trade-off is real though: you lose the single-readable-document property.
+Right now you can open a session file and it's valid, pretty-printed JSON — which
+genuinely helps when you're debugging a strange agent run, and that's worth
+something at this stage of a project. JSONL needs a parse loop, and metadata
+needs somewhere else to live.
+
+### The wire-format detail worth pointing at
+
+`agent.py:173-187` stores assistant messages in exactly the shape the API
+expects to receive back:
+
+```python
+assistant_msg = {
+    "role": "assistant",
+    "content": message.content or "",
+    "tool_calls": [
+        {"id": tc.id, "type": "function",
+         "function": {"name": tc.function.name,
+                      "arguments": tc.function.arguments}}  # stays a JSON string
+        for tc in message.tool_calls
+    ],
+}
+```
+
+Note the comment in your own code: `# stays as JSON string`. You're deliberately
+*not* parsing `arguments` into a dict before storing it, because the API expects
+a string there. Parse it for your own use (which you do separately at `:199`),
+store it as received.
+
+This is what makes `/resume` work at all: the session file can be loaded and
+sent straight back to the model with no transformation. **Store data in the
+format your consumer needs, not the format that's convenient to look at** —
+that's a general lesson and this is a clean example of it.
+
+### The unbounded-growth problem
+
+`get_messages()` returns everything, always. No trimming, no summarisation, no
+cap. Combined with the context-window wall from A0, long sessions are on a
+collision course and there's no handling for it.
+
+One detail shows you *saw* part of this problem — `agent.py:226-233` intercepts
+base64 screenshots and strips them out of the stored tool message, replacing
+them with `"[ screenshot attached in next message ]"`. That's deliberate
+anti-bloat work. But the image still gets appended as a user message at `:242`
+and lives in the history forever, so it's a partial fix. Worth mentioning both
+halves — it demonstrates you were thinking about context cost, and it's honest
+about the limit.
+
+---
