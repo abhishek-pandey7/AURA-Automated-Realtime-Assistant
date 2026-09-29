@@ -748,3 +748,148 @@ concurrency to manage and nothing to fan out."* Then immediately pivot to
 section 4, which is where those concepts legitimately enter.
 
 ---
+
+## 4. If this scales (10x, 100x)
+
+**Reframe the question first — do not skip this.**
+
+> Worth being precise about what scaling means here, because AURA isn't a
+> service. There's no RPS. Three different axes could grow, and they break in
+> completely different places:
+>
+> 1. **Task complexity** — one goal that needs 200 tool calls instead of 20.
+> 2. **Tool count** — 30 tools becoming 300, mostly via watch-and-learn.
+> 3. **Users**, if I hosted it — which is the only axis where the classic
+>    distributed-systems answers apply, and it's the one that requires a real
+>    rewrite.
+>
+> Let me take them in that order.
+
+### Axis 1: task complexity (10x longer tasks)
+
+**Breaks first: the context window.** Every iteration resends the whole history
+(`agent.py:121-124`) with no trimming. A tool result can be a 4000-char page
+fetch (`web.py:62`) or a full OCR screen map. At roughly 20 iterations you're
+near the limit of a mid-sized open model; at 200 you're far past it. The failure
+is ugly, too — an API error, retried three times by §2.5's logic, then
+`"Agent stopped"`. No graceful handling of "context exceeded" anywhere.
+
+**What I'd add: context compaction.** Summarise older turns into a rolling
+digest, keep the last N turns verbatim, and keep the original goal pinned. A
+cheaper/smaller model can do the summarising.
+**Trade-off:** summarisation is lossy and irreversible — compact away the wrong
+detail and the agent forgets something it needed, producing a bug that's nearly
+impossible to reproduce. Plus an extra LLM call at each compaction boundary.
+
+**Second: the 30-iteration cap** (`agent.py:96`) silently truncates long work.
+**What I'd add:** a token/cost budget instead of an iteration count, plus
+checkpointing so a truncated task resumes rather than restarting.
+**Trade-off:** budgets are harder to reason about than a plain counter, and
+resumable state means more persistence complexity.
+
+**Third: the frozen plan** (§2.3). At 10x complexity, a plan made with zero
+environmental knowledge is essentially guaranteed to be wrong by step six.
+**What I'd add:** replanning after each subtask, feeding actual results back into
+the planner.
+**Trade-off:** cost and latency on every subtask boundary, plus a new failure
+mode — a replanning loop that oscillates between two plans and never converges.
+You'd need a replan budget.
+
+**Fourth: write amplification** (§2.6). O(n²) full-file rewrites, and `_save()`
+runs after every tool batch. At 200 iterations with screenshots this is real disk
+churn.
+**What I'd add:** append-only JSONL plus atomic `os.replace`.
+**Trade-off:** you lose the single-readable-document property that makes session
+files nice to debug, and loading needs a parse loop.
+
+### Axis 2: tool count (30 → 300 tools)
+
+**Breaks first: the prompt.** *Every* tool schema goes in *every* request
+(`agent.py:125`). 300 tools is tens of thousands of tokens of fixed overhead on
+every iteration — and worse than the cost, tool-selection accuracy *degrades*
+with choice. A small model picking from 300 similar tools will pick wrong.
+
+**What I'd add: retrieval over tools** — embed the tool descriptions, and inject
+only the top-k relevant to the current goal. This is RAG applied to the tool
+registry, and `_init_tools()` is already the natural place to build the index.
+**Trade-off:** a retrieval miss means the agent *cannot see* the tool it needs
+and will confidently do something worse instead. That's a nastier failure than a
+bloated prompt, and you'd want the core tools (bash, file ops) always pinned
+regardless of retrieval.
+
+**Also breaks: the silent-import-failure problem** (§2.2) goes from annoying to
+untenable. With 300 mostly-generated modules, `except: pass` means you have no
+idea what's actually loaded.
+**What I'd add:** structured logging on registration failure, plus schema
+validation at registration, plus a health-check command.
+**Trade-off:** basically none. This is a pure win and the first thing I'd do.
+
+**And: name collisions.** The registry is a flat dict (`tools/__init__.py:6`) —
+two generated tools with the same name and the later import silently wins.
+**What I'd add:** namespacing (`generated.check_bitcoin_price`) and collision
+detection at registration.
+**Trade-off:** longer tool names in the prompt; breaks any existing reference.
+
+### Axis 3: multiple users (the hosted case)
+
+This is where the classic answers finally apply — but be honest that it's a
+**rewrite, not a scale-up**, because three things are fundamentally
+single-tenant:
+
+- **`~/.aura/sessions/`** is one directory for one user.
+- **`_session` in `browser.py:184`** is a process-global singleton.
+- **The desktop tools control *the* display.** There's one screen. `pyautogui`
+  drives the physical mouse. This does not multi-tenant at all.
+
+**Breaks first: shared desktop.** Two users, one mouse. Immediate corruption of
+both tasks.
+**What I'd add:** one isolated virtual desktop per session — a container with
+Xvfb or a VNC-backed VM, which is exactly what your README's "Cloud-Native
+Deployment" roadmap item points at.
+**Trade-off:** a full GUI container per active user is expensive (hundreds of MB
+of RAM, real CPU for screen capture and OCR), cold-start latency on session
+creation, and you've now got container orchestration, image maintenance and
+lifecycle management in a project that currently has none. This is the single
+biggest cost in hosting AURA and it's why "local-first" was a reasonable choice.
+
+**Then: no concurrency model.** The agent loop is synchronous and blocking, and
+`subprocess.run` (`shell.py:44`) and `pyautogui` calls block the whole process.
+**What I'd add:** a job queue — a session becomes a durable task, workers pull
+from it, the CLI/UI becomes a thin client polling status. This is where a queue
+genuinely earns its place.
+**Trade-off:** you lose synchronous interactivity, which breaks the confirmation
+gate (§2.4) — a worker can't call `console.input()`. You'd need async approval:
+the job suspends, notifies the user, waits for a decision. That's a significant
+redesign of your safety model, and worth saying out loud because it shows you
+understand the coupling.
+
+**Then: the LLM endpoint becomes the bottleneck.** One self-hosted open-weight
+model serving N concurrent agent loops, each firing a request per iteration.
+Inference is the expensive resource and it saturates fast.
+**What I'd add:** request batching at the inference server (vLLM-style continuous
+batching), horizontal replicas behind the proxy, per-user **rate limiting** so
+one runaway 200-iteration loop can't starve everyone, and **caching** — both
+prompt caching for the static system prompt and a semantic cache for repeated
+planner calls on identical goals.
+**Trade-off:** batching raises per-request latency to raise throughput. Rate
+limiting means legitimate heavy tasks get throttled — and an agent that stalls
+mid-task is worse UX than one that's uniformly slow. Semantic caching risks
+serving a stale plan for a goal whose environment has changed.
+
+**Then: OAuth token management.** Right now `token.json` is one file for one
+Google account (`gmail.py:22`, `calendar.py:19`, `meet.py:24`). Multi-user means
+per-user encrypted token storage, a real refresh scheduler, and revocation.
+**What I'd add:** a secrets manager (Vault, AWS Secrets Manager) with tokens
+encrypted at rest, keyed per user.
+**Trade-off:** operational complexity and a new hard dependency in the auth path
+— if the secrets store is down, nothing works.
+
+**And the thing I'd raise before they do:** hosting AURA means running
+arbitrary LLM-generated code (§2.8) and shell commands on infrastructure *I*
+own, on behalf of users. The local version's security model is "it's your
+machine, your risk." That doesn't transfer. Multi-tenant AURA needs real
+sandboxing — gVisor or Firecracker rather than plain containers, egress
+filtering, and per-tenant resource caps — before it could responsibly accept a
+single external user. Naming this yourself is much stronger than being told.
+
+---
