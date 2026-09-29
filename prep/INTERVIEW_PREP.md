@@ -1090,3 +1090,366 @@ synchronisation.
   be able to.
 
 ---
+
+## 6. Fifteen likely questions
+
+> First person, as you'd actually say it. Adapt the wording; keep the structure —
+> claim, evidence from the code, then the honest limit.
+
+### Q1. "Walk me through what happens when I type a goal."
+
+> Sure. Say I'm in the REPL and I type "find all TODOs in this repo and email me
+> a summary."
+>
+> `ui.py:206` reads the line. It doesn't start with a slash, so it's a goal.
+> First it goes to `plan()` in `planner.py` — a separate LLM call, low
+> temperature, capped at 512 tokens, that returns strict JSON: something like
+> two tasks, find the TODOs, then send the email. That plan gets rendered in a
+> panel so I can see what's about to happen before anything touches my machine.
+>
+> Then each task goes to `agent.run_agent()`. That's the loop. It builds the
+> system prompt — templated at runtime with my OS, shell, cwd and the current
+> time — and calls the model with the full conversation plus all thirty-odd tool
+> schemas. The model comes back with tool calls; I parse the arguments, dispatch
+> each through the registry, print what happened, and append the results as
+> `role: "tool"` messages. Then loop. When the model replies with *no* tool
+> calls, that's the done signal and I return the summary.
+>
+> Both tasks share one `Memory` object, so the email step can see what the grep
+> step found. And memory flushes to disk on every append, so if I Ctrl-C halfway
+> through there's a resumable session file in `~/.aura/sessions/`.
+
+### Q2. "How does the agent know when it's finished?"
+
+> `agent.py:156` — if the response has no `tool_calls`, I treat that as
+> completion, print the content as the summary, and return.
+>
+> And I'll be straight with you: that's a stop condition, not a success
+> condition. A model that gives up, or hallucinates that it's done, looks
+> identical to one that actually finished. I have no verification step. There's
+> also a hard cap of 30 iterations as a backstop against runaway loops, which
+> returns "task may be incomplete" — accurate but not actionable.
+>
+> What I'd add is an explicit verification pass: after the loop terminates, a
+> separate call that gets the original goal and the transcript and answers "was
+> this achieved, yes or no, and if no, what's missing." That gives me a real
+> success signal and a retry hook. It's the most valuable thing missing from the
+> loop right now.
+
+### Q3. "Why separate the planner from the executor? Isn't that just an extra API call?"
+
+> It is an extra call, and for a trivial goal it's pure overhead — I mitigate
+> that by telling the planner to emit a single task when the goal is simple, but
+> I still pay the round trip.
+>
+> I kept it for two reasons. The user-facing one: I get a plan to *show* before
+> anything executes. For an agent that's about to run shell commands and move my
+> mouse, seeing the intended steps first is a real trust mechanism, and it's
+> cheap. The technical one: each executor invocation gets one focused subtask
+> instead of a broad goal, which keeps the context tighter and reduces drift.
+> The temperature difference is deliberate — 0.2 for planning, 0.3 for execution,
+> because I wanted decomposition to be the stable half.
+>
+> The honest weakness is that the plan is frozen. It's made with no knowledge of
+> the environment and never revised, so if step two reveals it was wrong, steps
+> three through five still run. Real fix is replanning between subtasks, which
+> needs a budget to avoid oscillating.
+
+### Q4. "How do tools get registered? Why not just a dictionary?"
+
+> `aura/tools/__init__.py` walks its own directory with `pkgutil`, imports every
+> module, and registers anything that exposes a `TOOL_DEFS` list of JSON schemas
+> plus a function whose name matches the schema name.
+>
+> A dict would genuinely be safer — loud import errors, one place to look, static
+> analysis works. I'd probably choose it in most projects. But it's incompatible
+> with the feature I care most about: watch-and-learn writes a *new Python file*
+> into that directory at runtime and then calls `_init_tools()` again to pick it
+> up. With a static dict I'd have to edit source and restart. Self-extension
+> requires dynamic discovery, so the registry isn't a stylistic choice — it's
+> load-bearing.
+>
+> I'll flag the cost, because it bit me: the import is wrapped in
+> `except Exception: pass`, so a broken tool silently vanishes with no log. I
+> know the fix — log the module and exception — and it's the first thing I'd
+> change.
+
+### Q5. "You gave an LLM shell access on your own machine. Defend that."
+
+> It's the core risk of the project and I'd rather engage with it than downplay
+> it.
+>
+> What's actually there: confirmation gates enforced at the *tool* layer, not the
+> agent layer — so `shell.run` checks before executing regardless of who called
+> it, and no code path can route around a tool's own safety check. Two
+> independent controls: a `SAFE_MODE` env flag, and a deny-list of patterns that
+> prompt even when SAFE_MODE is off. Delete is unconditionally gated with
+> `force=True`. Commands are bounded by a timeout so nothing hangs forever.
+>
+> What's not good enough: the deny-list is substring matching on the command
+> string, which is weak, and it's the wrong list — it checks for `rm ` on a
+> Windows project where the native spelling is `Remove-Item`. So there's a hole
+> shaped like my own primary platform. It catches honest mistakes; it is not a
+> security boundary and I shouldn't call it one.
+>
+> The right answer is containerisation — bound the blast radius instead of trying
+> to classify strings. The reason I didn't is that AURA's whole premise is
+> operating my *real* environment: my logged-in Chrome profile, my Gmail token,
+> my actual desktop. Sandboxing removes exactly the capability that distinguishes
+> it from a cloud coding agent. So the trade I made was: local-only, single-user,
+> your machine, your risk — with gates for accidents rather than defences against
+> an adversary. That's defensible for a local tool and completely indefensible
+> the moment it's hosted, which is why hosting would need a real sandbox first.
+
+### Q6. "How does the desktop vision actually work? Why not just a vision model?"
+
+> `desktop_read_screen` screenshots the display and runs it through the native
+> Windows OCR engine via `winsdk`. For every recognised line I average the word
+> bounding boxes to get a pixel centroid, and return a table: coordinates and
+> text, line by line. Effectively a spatial map. The model reads that and clicks
+> by coordinate — my system prompt is explicit that it must perceive before
+> acting and never guess coordinates.
+>
+> Why not vision for everything: OCR is local, free, and fast. Vision tokens are
+> expensive and high-latency, and I'd pay them on every single perception step in
+> a 30-step task. Also, VLM coordinate estimation is genuinely unreliable —
+> bounding boxes from an OCR engine are exact. So I tiered it: OCR first, and
+> `desktop_analyze_screen` escalates to a real vision call when the screen is
+> graphical rather than textual. The screenshot gets downscaled to 1024px and
+> JPEG-compressed before sending, and I strip the base64 out of the stored tool
+> message so it doesn't bloat the transcript on every subsequent turn.
+>
+> Limits: OCR can't see unlabeled icons at all. A text line's centroid isn't
+> necessarily its control's hit area. And it's Windows-only — `winsdk` is WinRT.
+> The better long-term answer is accessibility APIs — UI Automation gives you the
+> real widget tree, so a button is a button instead of a string at coordinates —
+> and that's what I'd build next for desktop.
+
+### Q7. "Explain watch-and-learn. What's the failure mode?"
+
+> You run `aura learn "check my bank balance"` and do the task by hand.
+> `pynput` hooks mouse and keyboard and records a timestamped trace — clicked
+> left at (x, y) at T+2.3s, typed 'a', and so on — plus screenshots before and
+> after. That trace and both images go to a vision model with a prompt asking for
+> a self-contained module: a `TOOL_DEFS` schema plus a `pyautogui`
+> implementation. I strip any code fences, regex out the function name, write the
+> file into `aura/tools/`, and re-run the registry scan. The tool is live in the
+> same session.
+>
+> The reason an LLM is in the loop rather than a plain macro replay is
+> abstraction. A raw replay hardcodes the literal characters I typed. The model
+> generalises — `jiohotstar.py` came out of this pipeline with a real `query`
+> parameter and a single `pyautogui.write(query)` where the trace had thirty
+> individual keystrokes. That's the whole value.
+>
+> Failure modes, and there are several. The big one is security: I'm writing
+> model output to disk and importing it with no review, no AST check and no
+> sandbox. I should at minimum diff it to the user for approval — I already do
+> that for ordinary file writes, so it's inconsistent that codegen doesn't.
+> Second, the output is coordinate-brittle: you can see `click(1287, 1052)` in
+> one of the committed generated tools, which breaks on any resolution change,
+> and the model even emitted `press('cmd')` on Windows. Third, it uses fixed
+> `time.sleep()` for synchronisation, which is a race.
+>
+> The fix I actually want is to change the generator's target: emit
+> `desktop_find_text("Search")` and click *that*, instead of frozen pixels. Same
+> recording, output that uses the OCR layer I already have. That's a prompt
+> change plus a helper function, and it's what would make this
+> production-quality.
+
+### Q8. "What happens when the LLM endpoint is down or slow?"
+
+> I handle it in layers, and the numbers come from real failures rather than a
+> blog post — I was running an open-weight model behind a LiteLLM proxy on a
+> free tier that cold-starts, so slow first requests were the normal case.
+>
+> Timeouts are set generously and deliberately: 15 seconds to connect, 180 to
+> read, with a comment in `agent.py` naming cold starts as the reason. Then three
+> attempts with 5 and 10 second backoff, gated by an error classifier so I only
+> retry things worth retrying — 500s, timeouts, connection errors — and fail fast
+> on a 401 or a bad model name rather than burning fifteen seconds. The user sees
+> a retry notice each time rather than a silent stall. If all three fail, the
+> agent returns an error string instead of raising, so the REPL survives.
+>
+> The planner degrades separately and more gracefully: if planning fails
+> entirely, `plan()` returns the goal as a single task, so execution still
+> happens. The planner is a soft dependency by design.
+>
+> What's wrong with it: the classifier is substring matching on the error text,
+> which is fragile. There's no jitter, which doesn't matter with one client but
+> would if AURA were multi-instance. And the logic is duplicated in `agent.py`
+> and `planner.py` and has already drifted — one checks for "read error" and the
+> other doesn't. Should be one shared helper, or honestly just `tenacity`.
+
+### Q9. "This has no database, no cache, no queue. Is that a problem?"
+
+> No, and I'd resist adding them. AURA is a single local process with one user.
+> There's no server, no concurrency, no multi-writer state. JSON files are the
+> right storage for append-only single-session transcripts — zero dependencies,
+> no migrations, and readable with `cat`, which matters more than it sounds when
+> you're debugging a weird agent run. Adding Postgres and Redis here would be
+> architecture for its own sake.
+>
+> Where I *would* add them is specific and I can name the triggers. SQLite the
+> moment I want cross-session search or long-term memory — it ships with Python
+> and gives me real queries. A vector store when I want semantic recall over past
+> sessions, which is the natural next step. And a real queue only if I host it
+> multi-user, where a session becomes a durable job that a worker pulls.
+>
+> That last one has a catch worth mentioning: a queued worker can't call
+> `console.input()`, so moving to a queue breaks my whole confirmation model. I'd
+> need asynchronous approval — job suspends, user is notified, job resumes on a
+> decision. So it's not a drop-in; it's a redesign of the safety layer.
+>
+> The flaws in the current storage I'd actually fix: `_save()` rewrites the whole
+> file every append, which is O(n²), and it's not atomic — `open(path, "w")`
+> truncates first, so a crash mid-write corrupts the session. Temp file plus
+> `os.replace` is a two-line fix and I should have done it already.
+
+### Q10. "What breaks first if tasks get ten times longer?"
+
+> The context window, and it breaks ungracefully. Every iteration resends the
+> entire history with no trimming, and individual tool results are large — a page
+> fetch is up to 4000 characters, an OCR screen map can be a hundred lines. So
+> around twenty iterations I'm approaching the limit of a mid-sized open model,
+> and at two hundred I'm far past it. The failure surfaces as an API error, which
+> my retry logic then dutifully retries three times before giving up. There's no
+> handling for "context exceeded" specifically.
+>
+> The fix is compaction: summarise older turns into a rolling digest with a
+> cheaper model, keep the last few turns verbatim, keep the original goal pinned.
+> The trade-off is real though — summarisation is lossy and irreversible. Compact
+> away the wrong detail and the agent forgets something it needed, and that's a
+> bug that's very hard to reproduce.
+>
+> Behind that, three more things break in order: the 30-iteration cap truncates
+> legitimate work, so I'd want a token budget plus checkpointing instead of a
+> counter; the frozen plan becomes almost certainly wrong by step six, so I'd
+> want replanning; and session write amplification gets genuinely expensive, so
+> append-only JSONL.
+
+### Q11. "If you had 300 tools instead of 30, what happens?"
+
+> Two things break, and the second one is worse than the obvious one.
+>
+> The obvious one: every tool schema goes into every request, so 300 tools is
+> tens of thousands of tokens of fixed overhead on every iteration of every task.
+> Expensive.
+>
+> The worse one: tool-selection accuracy degrades with choice. A mid-sized open
+> model picking from 300 overlapping tool descriptions will pick wrong, and a
+> wrong tool choice is a much worse outcome than a large bill.
+>
+> The fix is retrieval over the registry — embed tool descriptions, inject only
+> the top-k relevant to the current goal. It's RAG applied to tools, and
+> `_init_tools()` is already the natural place to build the index. The trade-off
+> is a nastier failure mode: a retrieval miss means the agent literally cannot
+> see the tool it needs and will confidently do something worse instead. So I'd
+> pin the core tools — bash, file ops — as always-present regardless of
+> retrieval, and only make the long tail retrievable.
+>
+> Two more things would bite at that scale. The silent-import-failure problem
+> goes from annoying to untenable when most of those 300 are generated — I'd need
+> real logging and schema validation at registration. And the registry is a flat
+> dict, so two generated tools with the same name means the later import silently
+> wins. That needs namespacing and collision detection.
+
+### Q12. "How would you make this multi-user?"
+
+> Honestly? It's a rewrite, not a scale-up, and I'd want to say that clearly
+> rather than pretend I could add a load balancer.
+>
+> Three things are fundamentally single-tenant. Sessions live in one home
+> directory. The browser is a process-global singleton. And the desktop tools
+> control *the* display — there's one physical mouse, and `pyautogui` drives it.
+> Two concurrent users would corrupt each other's tasks immediately.
+>
+> So the architecture is: one isolated virtual desktop per session — a container
+> with Xvfb, or a VNC-backed VM. That's expensive: hundreds of megabytes and real
+> CPU per active user for screen capture and OCR, plus cold-start latency, plus
+> container orchestration in a project that has none. That cost is precisely why
+> local-first was a reasonable choice for v1.
+>
+> Then sessions become durable jobs on a queue with workers pulling them — which,
+> as I mentioned, breaks synchronous confirmation and forces an async approval
+> flow. Then the inference endpoint becomes the real bottleneck, so continuous
+> batching at the server, horizontal replicas, and per-user rate limiting so one
+> runaway loop can't starve everyone. Prompt caching for the static system
+> prompt would pay for itself immediately given I resend seventy lines every
+> iteration.
+>
+> And the thing I'd raise unprompted: hosting means running LLM-generated code
+> and arbitrary shell commands on *my* infrastructure for other people. The local
+> security model is "your machine, your risk," and that doesn't transfer at all.
+> I'd want gVisor or Firecracker rather than plain containers, egress filtering,
+> and per-tenant resource caps before accepting a single external user.
+
+### Q13. "Your test suite doesn't cover the agent loop. Why not?"
+
+> It doesn't, and that's the gap I'd fix first if I were continuing. What's there
+> is a smoke-test script — not even pytest, just a hand-rolled `test()` helper
+> with prints and a `sys.exit` — and it covers the easy part: the pure functions
+> in filesystem, web, and the registry. The agent loop, the planner, the
+> confirmation gate and the code generator have zero coverage, which is exactly
+> backwards, because the loop is the highest-risk code in the project.
+>
+> It also has real defects. It hits httpbin.org and DuckDuckGo live, so it flakes
+> and doesn't work offline. And it uses Unix commands and `/tmp` paths on a
+> Windows-first project, so some tests fail by construction.
+>
+> Concretely what I'd do: port to pytest for fixtures and parametrisation. Mock
+> the OpenAI client so I can test the loop deterministically — does it terminate
+> when there are no tool calls, does it stop at max_iterations, does it retry a
+> 502 and *not* retry a 401, does it recover when the model wraps tool arguments
+> in markdown fences. Mock the network. Fix the platform assumptions. None of
+> that is hard; it's the thing that got deferred under time pressure, which is
+> the normal reason and not a good one.
+
+### Q14. "What's the single worst decision in this codebase?"
+
+Good question to have a crisp answer for. Pick one, own it, show the reasoning.
+
+> Writing LLM-generated code to disk and importing it with no review step. Not
+> because generating tools is wrong — I think that feature is the most
+> interesting thing here — but because I already had the right pattern in the
+> codebase and didn't apply it. `confirm.py` gates ordinary file writes with a
+> preview and a Y/N. Codegen, which is strictly more dangerous, skips it
+> entirely. That inconsistency is worse than either choice made deliberately,
+> because it means I wasn't thinking about the codegen path as a write at all.
+>
+> If you want a runner-up: the hardcoded `C:\Users\Abhishek Pandey\...` path in
+> `browser.py`. That one's not interesting as a decision, but it's a process
+> failure — it survived because I only ever ran the project on one machine, and I
+> had no check that would have caught it.
+
+### Q15. "What would you build next, and why that?"
+
+> Three things, in order, and the order is deliberate — cheapest-highest-impact
+> first.
+>
+> One: **observability**. Structured logging with a session-scoped file handler,
+> real error reporting in the tool registry instead of `except: pass`, and token
+> and cost accounting per task. Right now if a run goes wrong I have printed
+> output and nothing else, and I can't tell you what a task cost. This is a day
+> of work and it makes everything after it easier to debug.
+>
+> Two: **verification in the loop**. After the agent stops, a separate call that
+> takes the original goal and the transcript and answers whether it was actually
+> achieved. That turns my stop condition into a success signal and gives me a
+> retry hook — and it's the difference between an agent that finishes and an
+> agent that succeeds.
+>
+> Three: **semantic generated tools**. Change what the codegen emits — OCR
+> anchors via `desktop_find_text` instead of raw pixel coordinates, and real
+> waits instead of `time.sleep`. That's the change that makes watch-and-learn go
+> from a demo to something durable, and it's mostly a prompt change because the
+> perception layer already exists.
+>
+> Further out, the interesting one is replanning: feeding subtask results back to
+> the planner so the plan can change as the agent learns about the environment.
+> That's the biggest capability jump available, and also the one most likely to
+> introduce oscillation, so it needs a budget and careful evaluation. I'd want
+> the observability work done first so I could actually measure whether it
+> helped.
+
+---
