@@ -123,3 +123,98 @@ It's how you tell the model "here is a function, here are its parameters" in a
 way the model can program against. More on this in A1.
 
 ---
+
+## A1. Tool calling (function calling)
+
+### The problem it solves
+
+A language model can only produce text. It cannot run a command, read a file, or
+click a mouse. If you ask a plain chat model "what's in my home directory?" the
+best it can do is *describe* how you'd find out.
+
+Tool calling is the bridge. You describe your functions to the model in a
+structured format; instead of prose, the model can emit a **structured request
+to call one**. Your code executes it and hands back the result. The model never
+executes anything — it asks, you decide, you run it.
+
+### How it actually works
+
+Three steps.
+
+**1. You declare what's available.** Every tool module in `aura/tools/` exports
+a `TOOL_DEFS` list. Here's the shape, from `aura/tools/shell.py:6`:
+
+```python
+TOOL_DEF = {
+    "type": "function",
+    "function": {
+        "name": "bash",
+        "description": "Run a shell command in the current working directory. ...",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The shell command to execute."},
+                "timeout": {"type": "integer", "description": "Max seconds to wait. Default 60."},
+            },
+            "required": ["command"],
+        },
+    },
+}
+```
+
+The **description fields are the real API documentation** — they are the only
+thing the model reads to decide whether this tool fits the situation. That's why
+yours are verbose and contain warnings like "On Windows this is PowerShell — use
+PowerShell syntax only." A vague description produces wrong tool choices. Tool
+descriptions are prompt engineering, not comments.
+
+**2. The model responds with a call, not an answer.** You pass
+`tools=ALL_TOOL_DEFS, tool_choice="auto"` (`agent.py:125-126`) — "here's
+everything you can do, decide for yourself whether to use any." The response
+comes back with a `tool_calls` array instead of text: a name, an id, and
+arguments as a **JSON string**.
+
+**3. You execute and report back.** `agent.py:199` parses the arguments,
+`:213` dispatches, and `:235` appends the result as a message with
+`role: "tool"` and the matching `tool_call_id`. The id is what lets the model
+pair a result with the request that produced it — necessary because a single
+response can contain several parallel tool calls, which your loop handles at
+`:194`.
+
+### The detail worth pointing at in an interview
+
+`agent.py:197-210`:
+
+```python
+try:
+    tool_inputs = json.loads(tc.function.arguments)
+except json.JSONDecodeError:
+    # Some models wrap JSON in markdown fences
+    raw = tc.function.arguments.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        ...
+```
+
+The `arguments` field is *specified* to be a JSON string. Your code handles the
+case where it comes back wrapped in markdown code fences anyway. That's not
+defensive paranoia — that's a real behaviour of smaller open-weight models, and
+the same workaround appears independently in `planner.py:73-78`.
+
+This is a genuinely good thing to volunteer, because it shows you know the
+difference between the spec and reality: *"I'm running an open-weight model,
+and its tool-call formatting isn't always spec-compliant, so the harness
+tolerates fenced JSON. That's the tax you pay for model independence."*
+
+### When tool calling is the wrong approach
+
+- **When the task is pure text** (summarise this, translate that). No tools
+  needed; you're adding a round trip for nothing.
+- **When the sequence is fixed and known.** If you always do A then B then C,
+  write `a(); b(); c()`. Letting a model decide adds latency, cost and
+  non-determinism to something that had none.
+- **When you can't tolerate a wrong choice.** The model *might* pick the wrong
+  tool. If a wrong pick is catastrophic and unrecoverable, don't delegate the
+  decision.
+
+---
