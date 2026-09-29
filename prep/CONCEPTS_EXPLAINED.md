@@ -1648,3 +1648,31 @@ regardless of retrieval, and only make the long tail retrievable.
 when starting a new task. This is your README's "Long-term Memory (RAG)" roadmap
 item and it's the natural evolution of `memory.py`. Also where SQLite or a real
 vector store finally earns its place over JSON files.
+
+## B7. Context compaction
+
+**What it is.** Managing a growing conversation so it stays inside the context
+window (A0). Strategies:
+
+- **Truncation** — drop the oldest messages. Trivial, and it loses the goal
+  itself, which is usually the first message. Bad.
+- **Sliding window** — keep the last N, plus always pin the original goal.
+  Better, still loses the middle.
+- **Summarisation** — periodically compress older turns into a digest with a
+  cheap model; keep recent turns verbatim. The usual answer.
+- **Hierarchical** — summaries of summaries for very long runs.
+
+**Where it applies: directly, and it's the answer to "what breaks first."**
+`memory.get_messages()` returns everything, forever. Around 20 iterations you're
+near the limit of a mid-sized model.
+
+**The trade-off to name:** summarisation is **lossy and irreversible**. Compact
+away the one detail the agent needed later and you get a bug that is nearly
+impossible to reproduce, because the information is simply gone. Plus an extra
+LLM call at each compaction boundary.
+
+A practical refinement worth offering: **tool results are usually the biggest and
+least reusable part of the history.** A 4,000-character page fetch matters for
+one or two iterations and then never again. Compacting *tool results
+specifically* — while keeping the assistant's reasoning verbatim — gets most of
+the savings with much less risk than summarising everything uniformly.
