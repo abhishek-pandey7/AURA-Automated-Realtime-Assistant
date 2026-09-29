@@ -1577,3 +1577,28 @@ shared dataset. Session files are per-user and never queried across users.
 **What you'd say:** *"Load balancing across inference replicas, yes. Sharding,
 no — there's no shared dataset to split. Sessions are per-user and nothing ever
 queries across them, so sharding would solve a problem I don't have."*
+
+## B4. Rate limiting
+
+**What it is.** Cap how much a client can consume in a time window. Protects
+shared resources from being monopolised — whether by abuse or by one honest
+runaway process.
+
+**Common algorithms**, worth knowing by name:
+
+- **Token bucket** — a bucket refills at a steady rate; each request takes a
+  token. Allows bursts up to bucket size, then throttles to the refill rate. The
+  most commonly used.
+- **Leaky bucket** — requests drain at a fixed rate. Smooths bursts entirely.
+- **Fixed window** — N requests per minute. Simple, but has a boundary problem:
+  you can do 2N across a window boundary.
+- **Sliding window** — fixes the boundary problem at the cost of more state.
+
+**Where it would apply:** multi-user hosting. One user's 200-iteration agent loop
+could saturate a self-hosted model and starve everyone else. Per-user limits on
+iterations, tokens, or concurrent sessions.
+
+**The trade-off worth stating:** an agent that gets throttled *mid-task* is worse
+UX than one that's uniformly slow — it stalls in an unfinished state, which is a
+confusing thing for a user to look at. You'd want limiting at *session admission*
+(refuse to start) rather than mid-loop where possible.
