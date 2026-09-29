@@ -1714,3 +1714,35 @@ removes the entire point. AURA needs your *real* desktop, your *real* logged-in
 Chrome profile, your *real* Gmail token. A sandboxed AURA is a cloud coding
 agent, which is the thing it exists to not be. Frame it as a deliberate trade
 with a known boundary, not an oversight.
+
+## B9. Observability
+
+**What it is.** The ability to understand what a system did from its outputs —
+crucially, *after the fact*, without reproducing the problem. Three pillars:
+
+- **Logs** — discrete timestamped events. What happened.
+- **Metrics** — aggregated numbers over time. How much, how often, how slow.
+- **Traces** — one request's path through the system. Where the time went.
+
+**Where it applies to AURA: everywhere, and this is your best "what next"
+answer**, because it's cheap and it makes everything after it easier.
+
+Right now there is **no logging at all**. Everything is `console.print` (Rich
+markup, human-readable, ephemeral). If a user's run goes wrong there is no
+artifact to inspect. And §A3's `except: pass` means some failures leave no trace
+whatsoever.
+
+Concretely for AURA:
+
+- **Logs** — Python `logging` with a session-scoped file handler. Every tool
+  call, arguments, result, duration. Registry import failures with the exception.
+- **Metrics** — tokens per iteration, cost per task, iterations per task, tool
+  success/failure rates, retry counts. You currently cannot answer "what did that
+  task cost," and for something that loops 30 times, you should be able to.
+- **Traces** — a trace id per session threading through planner → agent →
+  dispatch, so one run is reconstructable end to end.
+
+Note that you already have the *display* half solved — the Rich output in
+`agent.py:257-330` makes a live run followable. What's missing is the durable
+half. Framing it that way ("I built for watching, not for reviewing") is precise
+and honest.
