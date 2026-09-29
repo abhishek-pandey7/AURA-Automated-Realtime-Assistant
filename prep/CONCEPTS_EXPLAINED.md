@@ -434,3 +434,97 @@ design would let a module declare the mapping explicitly (e.g. an optional
   import. Combined with A9, that's the security story of this project.
 
 ---
+
+## A4. Two-stage pipelines (planner + executor)
+
+### The idea
+
+Rather than one model call doing everything, split the work across calls with
+different jobs, different prompts, and different settings. AURA does this in two
+stages:
+
+```
+  goal string
+      │
+      ▼
+┌──────────────┐   planner.py — temp 0.2, 512 tokens, NO tools
+│   PLANNER    │   job: decompose into ≤10 concrete subtasks, return JSON
+└──────────────┘
+      │
+      ▼  ["create dir and files", "write the Flask app", "run tests and fix"]
+      │
+      ├────────► agent.run_agent(task_1, memory)  ─┐
+      ├────────► agent.run_agent(task_2, memory)   │ agent.py — temp 0.3,
+      └────────► agent.run_agent(task_3, memory)  ─┘ 4096 tokens, ALL tools
+                                        │
+                                   one shared Memory
+```
+
+### Why split at all
+
+Three distinct benefits, and you should be able to name which one mattered most
+(this is one of the `[confirm with me]` spots — the code supports more than one
+reading):
+
+**1. The plan is visible before anything runs.** `ui.py:230` renders it in a
+panel. For an agent that is about to execute shell commands and move your
+physical mouse, showing the intended steps first is a trust mechanism, and it
+costs almost nothing. This is a UX argument, and it's a good one.
+
+**2. Each executor context stays focused.** Instead of one sprawling
+conversation about a five-part goal, you get five conversations each about one
+thing. Less drift, less context.
+
+**3. Different jobs want different settings.** Decomposition wants stability
+(temp 0.2, tight token cap). Execution wants a little adaptability (temp 0.3,
+4096 tokens for tool arguments). One call can't have two temperatures.
+
+### Soft dependency — the part that's actually well-designed
+
+`planner.py:84-88`:
+
+```python
+    except Exception:
+        pass
+
+    # Fallback — treat whole goal as one task
+    return [goal]
+```
+
+If planning fails *entirely* — endpoint down, malformed JSON, anything — the
+function returns the original goal as a single-element list and **execution
+proceeds normally**. The agent loop is perfectly capable of handling an
+undecomposed goal; it just doesn't get the nice plan display.
+
+That's a **soft dependency**: a component whose failure degrades the experience
+rather than stopping the system. Contrast with the LLM endpoint itself, which is
+a **hard dependency** — if that's down, nothing works. Knowing which of your
+dependencies are which is a real architectural skill, and you can point at this
+as a case where you got it right.
+
+### The flaw: the plan is frozen
+
+This is the sharpest legitimate criticism of AURA's design and you should raise
+it yourself.
+
+The planner runs **before any execution**, so it has zero information about the
+environment. It's guessing from the goal string alone. If subtask 2 discovers
+that the plan was wrong — the file doesn't exist, the app has a different
+layout, the API returned something unexpected — subtasks 3, 4 and 5 still run
+exactly as written. There's no mechanism to revise or discard them.
+
+Two things partially mitigate it, and they're worth mentioning so the criticism
+doesn't sound worse than it is:
+
+- The ReAct loop *within* each subtask is fully adaptive. Local recovery works
+  well; it's only the cross-subtask structure that's rigid.
+- All subtasks share one `Memory` instance (`ui.py:248` passes the same object
+  each time), so later subtasks can see what earlier ones actually did.
+
+**The real fix is replanning**: after each subtask, feed the results back to the
+planner and let it revise the remainder. The cost is latency and money at every
+boundary, plus a new failure mode — a replanning loop that oscillates between two
+plans forever. So you'd need a replan budget. That's the kind of "here's the fix
+*and* what the fix costs" answer that lands well.
+
+---
