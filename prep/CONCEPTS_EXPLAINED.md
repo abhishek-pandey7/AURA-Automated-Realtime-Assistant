@@ -912,3 +912,140 @@ halves — it demonstrates you were thinking about context cost, and it's honest
 about the limit.
 
 ---
+
+## A8. Tiered perception: OCR, centroids, vision fallback
+
+### The problem
+
+To click a button on screen, something has to know where the button *is*. Three
+options:
+
+1. **Hardcode coordinates.** Works until anything moves. (This is what your
+   *generated* tools do, and it's their main flaw.)
+2. **Ask a vision model.** "Where's the search box?" Flexible, expensive, slow,
+   and VLM coordinate estimates are genuinely unreliable.
+3. **OCR the screen.** Extract every text string with its exact pixel position.
+   Fast, local, free — but blind to anything that isn't text.
+
+AURA does 3 with 2 as a fallback. That's **tiered perception**: cheap method
+first, escalate only when it fails.
+
+### What OCR gives you here
+
+`desktop_read_screen` (`desktop.py:212`) uses `winsdk.windows.media.ocr` — the
+OCR engine **built into Windows**. Not Tesseract, not a cloud API. Locally
+installed, no network, no per-call cost.
+
+The output is a spatial map:
+
+```
+[ AURA ] Screen Map (1920x1080) — 47 text regions found:
+   [  X ,   Y ]  Text
+  -------------------------------------------------------
+  [  84,   18]  File Edit View History Bookmarks
+  [ 640,   52]  Search or enter address
+  [ 312,  240]  Sign in to your account
+  [ 456,  388]  Continue
+```
+
+The model reads that and calls `desktop_click(x=456, y=388)`. **Perception
+becomes text**, and text is what the model consumes natively.
+
+### Centroids — what that word means
+
+A **centroid** is the geometric centre of a shape. The OCR engine returns a
+bounding *rectangle* per word (x, y, width, height), but to click you need a
+single point.
+
+`desktop.py:247-250`:
+
+```python
+xs = [w.bounding_rect.x + w.bounding_rect.width / 2 for w in words]
+ys = [w.bounding_rect.y + w.bounding_rect.height / 2 for w in words]
+cx = int(sum(xs) / len(xs))
+cy = int(sum(ys) / len(ys))
+```
+
+For each word: centre = left edge + half the width. Then average across all
+words in the line, giving the centre of the whole line.
+
+**The approximation this bakes in:** the centre of a *text label* is not
+necessarily inside its *clickable control*. For a button with a centred label
+they coincide and it works perfectly. For a wide table row, or a label sitting
+beside its checkbox rather than on it, the centroid can land outside the hit
+area. This is a known limit, not a bug, and it's a good honest detail to raise.
+
+### The async bridge — a smell worth being able to explain
+
+`desktop.py:262-264`:
+
+```python
+import concurrent.futures
+with concurrent.futures.ThreadPoolExecutor(1) as pool:
+    return pool.submit(asyncio.run, _read()).result()
+```
+
+Why this exists: the WinRT OCR API is **async** (`await engine.recognize_async`),
+but your tool functions are **sync** — `dispatch()` calls them plainly and the
+whole agent loop is synchronous. You can't `await` from sync code, and calling
+`asyncio.run()` directly fails if an event loop is already running in the
+thread.
+
+The workaround: spawn a one-thread pool, run `asyncio.run` inside *that* thread
+(which has no event loop of its own), and block on the result.
+
+It works. It's also a smell: a fresh thread pool created and destroyed on every
+single screen read. The cleaner fix is one long-lived worker thread with a
+persistent loop, or making the tool layer async throughout. Being able to say
+"here's why this odd code exists, here's what I'd do instead" is much better
+than hoping nobody asks.
+
+### The vision fallback
+
+`desktop_analyze_screen` (`:320`) is tier 2: screenshot → downscale to 1024px →
+JPEG at quality 85 → base64 → send to a vision model.
+
+The downscale and compression are deliberate cost control. A raw 1920×1080 PNG
+is enormous as base64; 1024px JPEG is a fraction of the tokens and loses nothing
+the model needs.
+
+Then `agent.py:226-249` does something a bit clever: the tool returns the image
+as `[ IMAGE_BASE64: data:image/jpeg;base64,... ]`, and the agent **intercepts
+that marker**, strips the payload out of the tool-result message, and re-attaches
+it as a proper `image_url` content block on a following user message. Tools
+return strings (that's the contract), but images need structured multimodal
+content — so the marker is a channel for smuggling non-string data through a
+string-typed interface.
+
+It's a workaround, and the cleaner design is for tools to return a structured
+type rather than a string. But it solves a real problem and you should be able
+to explain the constraint that forced it.
+
+### The platform lock-in
+
+`winsdk` is Windows-only — it's a binding to WinRT. `pyproject.toml` marks it
+`sys_platform == 'win32'`, so on Linux it isn't installed, the import at
+`desktop.py:216` fails, and §A3's `except: pass` silently swallows it. Result:
+every `desktop_*` tool simply doesn't exist on Linux, **with no message
+explaining why**. Two weaknesses compounding — worth naming as an example of how
+silent failure handling makes other problems harder to diagnose.
+
+### The better long-term answer: accessibility APIs
+
+Know this as your "what I'd build next" for desktop.
+
+Operating systems expose **accessibility APIs** — UI Automation on Windows,
+AT-SPI on Linux, NSAccessibility on macOS — built for screen readers. They give
+you the actual **widget tree**: this is a button, it's named "Submit", it's
+enabled, here's its bounds, here's its parent dialog.
+
+That's categorically better than OCR. A button is *a button*, not a string that
+happens to sit at (456, 388). You get element types, states, and stable handles
+that survive the window moving.
+
+The costs: much more implementation work, deeply platform-specific, and it
+doesn't cover apps that draw their own UI (Electron, games, canvas-based apps) —
+which is precisely where OCR still wins. The realistic answer is both: a11y tree
+when available, OCR when not.
+
+---
