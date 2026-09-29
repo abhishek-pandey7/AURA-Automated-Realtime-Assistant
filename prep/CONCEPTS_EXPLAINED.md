@@ -1524,3 +1524,27 @@ changes, correct, needs plumbing), or never (fine only for immutable data).
 **What you'd say:** *"Caching applies in three places, and the one I'd actually
 want is prompt caching for the static prefix — but I can't have it because I'm
 self-hosting. That's a genuine cost of the portability choice."*
+
+## B2. Queues and async work
+
+**What it is.** Instead of doing work in the request, put a **message** on a
+queue; **worker** processes pull and execute it. Decouples the requester from the
+executor.
+
+**Why anyone does it:** absorb bursts (the queue buffers), scale workers
+independently, retry failed work durably, and survive worker crashes without
+losing the job.
+
+**Where it would apply:** only in the multi-user case. A session becomes a
+durable job; workers pull them; the UI polls for status.
+
+**The catch you should absolutely mention**, because it shows systems thinking:
+**a queue breaks your confirmation model.** A background worker cannot call
+`console.input()` (`confirm.py:46`) — there's no terminal attached and nobody
+watching. You'd need **asynchronous approval**: the job suspends, persists its
+pending-decision state, notifies the user out-of-band, and resumes when a
+decision arrives.
+
+So moving to a queue is not a drop-in change — it's a redesign of the safety
+layer from A5. Naming that coupling unprompted is the strong version of this
+answer.
