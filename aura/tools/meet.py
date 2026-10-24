@@ -13,6 +13,7 @@ import base64
 import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from aura.config import data_path
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
@@ -20,8 +21,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
 ]
 
-CREDENTIALS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "credentials.json")
-TOKEN_FILE       = os.path.join(os.path.dirname(__file__), "..", "..", "token.json")
+CREDENTIALS_FILE = str(data_path("credentials.json"))
+TOKEN_FILE       = str(data_path("token.json"))
 
 TOOL_DEFS = [
     {

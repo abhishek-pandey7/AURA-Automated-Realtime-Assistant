@@ -1,4 +1,18 @@
+import os
+import sys
+from pathlib import Path
 from aura.confirm import confirm_browser
+
+
+def _chrome_profile_dir() -> str:
+    """The user's real Chrome profile, so logins and cookies carry over. AURA_CHROME_PROFILE overrides."""
+    if os.getenv("AURA_CHROME_PROFILE"):
+        return os.environ["AURA_CHROME_PROFILE"]
+    if sys.platform == "win32":
+        return str(Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Google" / "Chrome" / "User Data")
+    if sys.platform == "darwin":
+        return str(Path.home() / "Library" / "Application Support" / "Google" / "Chrome")
+    return str(Path.home() / ".config" / "google-chrome")
 
 TOOL_DEFS = [
     {
@@ -82,7 +96,7 @@ class BrowserSession:
             from playwright.sync_api import sync_playwright
             self._playwright = sync_playwright().start()
             
-            user_data_dir = r"C:\Users\Abhishek Pandey\AppData\Local\Google\Chrome\User Data"
+            user_data_dir = _chrome_profile_dir()
             
             try:
                 # 1) Try to connect via CDP if they launched Chrome with remote debugging

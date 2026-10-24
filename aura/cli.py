@@ -1,6 +1,6 @@
 import sys
 import os
-from aura.config import VERSION
+from aura.config import VERSION, USER_NAME
 
 
 USAGE = """
@@ -91,7 +91,7 @@ def _run_single(goal: str):
     try:
         import pyttsx3
         engine = pyttsx3.init()
-        engine.say("Task completed successfully, Abhishek.")
+        engine.say(f"Task completed successfully, {USER_NAME}." if USER_NAME else "Task completed successfully.")
         engine.runAndWait()
     except Exception:
         pass

@@ -15,8 +15,9 @@ browser tools, orchestrated by the LLM.
 
 import os
 import json
+from aura.config import data_path
 
-PROFILE_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "user_profile.json")
+PROFILE_FILE = str(data_path("user_profile.json"))
 
 # Canonical default profile — extend freely
 DEFAULT_PROFILE = {
@@ -112,7 +113,7 @@ TOOL_DEFS = [
                         "type": "object",
                         "description": (
                             "A dict mapping entry IDs to values, e.g. "
-                            "{\"entry.123456\": \"Abhishek Pandey\", \"entry.789012\": \"abhishek@example.com\"}."
+                            "{\"entry.123456\": \"Jane Doe\", \"entry.789012\": \"jane@example.com\"}."
                         )
                     }
                 },
