@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aura-agent"
+name = "aura-autonomous-agent"
 version = "0.2.0"
 description = "Autonomous agent that plans a goal and carries it out with shell, file, web, browser, Google Workspace and desktop tools."
 readme = "README.md"
@@ -50,7 +50,7 @@ google = [
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.0.0",
 ]
-all = ["aura-agent[browser,desktop,voice,google]"]
+all = ["aura-autonomous-agent[browser,desktop,voice,google]"]
 dev = ["pytest>=8.0", "build>=1.0"]
 
 [project.urls]
