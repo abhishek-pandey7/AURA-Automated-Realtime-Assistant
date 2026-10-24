@@ -1,365 +1,338 @@
-# AURA - Automated Realtime Assistant
+<h1 align="center">AURA</h1>
 
-A CLI-based autonomous AI agent that plans, executes, and adapts. Powered by open-weight LLMs via an OpenAI-compatible endpoint, AURA is designed to bridge the gap between simple text-based AI assistants and full-fledged system operators. 
+<p align="center"><b>Automated Realtime Assistant</b></p>
 
-From writing complete projects in an IDE to utilizing custom computer vision for desktop interaction, AURA interacts with your operating system the same way you do.
+<p align="center">
+An autonomous agent that turns a plain-English goal into a plan, then carries it out on your own machine:<br>
+shell, files, web, a logged-in browser, Gmail and Calendar, and the desktop itself, driven by on-screen OCR.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/aura-autonomous-agent/"><img src="https://img.shields.io/pypi/v/aura-autonomous-agent?color=2563eb&label=PyPI" alt="PyPI version"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-2563eb" alt="Python 3.10+">
+  <a href="https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/LLM-any%20OpenAI--compatible%20endpoint-7c3aed" alt="Any OpenAI-compatible LLM">
+</p>
+
+<p align="center">
+  <a href="#demos">Demos</a> &nbsp;|&nbsp;
+  <a href="#quick-start">Quick start</a> &nbsp;|&nbsp;
+  <a href="#how-it-works">How it works</a> &nbsp;|&nbsp;
+  <a href="#tools">Tools</a> &nbsp;|&nbsp;
+  <a href="#python-library">Python library</a> &nbsp;|&nbsp;
+  <a href="#configuration">Configuration</a>
+</p>
+
+```bash
+pip install "aura-autonomous-agent[all]"
+aura run "schedule a Meet with the team tomorrow at 10 and email them the link"
+```
+
+## Highlights
+
+- **Plans, then acts.** A dedicated planner call breaks each goal into up to 10 ordered subtasks; a ReAct executor then calls tools, reads every result and self-corrects until each subtask is done.
+- **35 built-in tools** across shell, files, web search, Playwright, Gmail, Google Calendar, Google Meet, Google Forms and OS-level mouse and keyboard control.
+- **Sees the screen without spending tokens.** Native Windows OCR turns the display into a map of every text line and its pixel position, so the agent clicks by coordinates on apps that have no API. A vision model is the fallback for purely graphical screens.
+- **Learns new tools by watching you.** Record yourself doing a task once; a vision model writes it up as a Python tool, which is hot-registered and available immediately, with no restart.
+- **Works as you.** Drives your real Chrome profile with its logins and cookies, and your Google account over OAuth.
+- **Model-agnostic.** Runs against any OpenAI-compatible endpoint: OpenAI, a LiteLLM proxy, vLLM or a self-hosted open-weight model.
+- **Safe by default.** Writes and shell commands ask Y/N first; deletes, `sudo`, `git push` and package installs always ask, even with safe mode off.
+- **A CLI and a library.** Use `aura run` in a terminal or `from aura import Agent` in your own code, with your own Python functions as extra tools.
 
 ---
 
 ## Demos
 
-Each clip is a single prompt typed (or spoken) into `aura run`. AURA plans the steps and carries them out on its own. The previews are sped up, so click any of them to watch the full recording.
+Each clip is a single prompt typed or spoken into `aura run`. AURA plans the steps and carries them out on its own. Previews are sped up; click one to watch the full recording.
 
-### 1. Writes and publishes a LinkedIn post
+### Writes and publishes a LinkedIn post
 
-Prompt: *"open linkedin and make a post on the rabbit and the hare"*
+*"open linkedin and make a post on the rabbit and the hare"*
 
-AURA opens Chrome on the logged-in profile, writes the story into the post composer, and clicks Post.
+Opens Chrome on the logged-in profile, writes the story into the post composer and clicks Post.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/linkedin.gif" alt="AURA writing and publishing a LinkedIn post" width="100%"></a>
 
-[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4)
+### Voice to code
 
-### 2. Voice to code
+`/voice` then *"give me CNN code for mnist dataset"*
 
-Prompt (spoken via `/voice`): *"give me CNN code for mnist dataset"*
+Transcribes the request, plans it and writes a complete PyTorch MNIST CNN with data loading, model, training loop and evaluation.
 
-AURA transcribes the request, plans it, and writes a complete PyTorch MNIST CNN with data loading, model, training and evaluation.
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/voice-cnn.gif" alt="AURA turning a spoken request into a PyTorch CNN" width="100%"></a>
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
+### Finds and plays IPL highlights on JioHotstar
 
-[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4)
+*"open jiohotstar, search for RCB vs DC highlights and play the first video"*
 
-### 3. Finds and plays IPL highlights on JioHotstar
+Launches the app from the Start menu, searches for the match and starts playback.
 
-Prompt: *"open jiohotstar, search for RCB vs DC highlights and play the first video"*
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/jiohotstar.gif" alt="AURA finding and playing IPL highlights on JioHotstar" width="100%"></a>
 
-AURA launches the app from the Start menu, searches for the match, and starts playback.
+### Searches YouTube and plays a video
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
+*"open youtube, search for sidemen and play the first youtube video"*
 
-[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4)
+Opens the browser, runs the search and plays the top result.
 
-### 4. Searches YouTube and plays a video
-
-Prompt: *"open youtube, search for sidemen and play the first youtube video"*
-
-AURA opens the browser, runs the search, and plays the top result.
-
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
-
-[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4)
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/youtube.gif" alt="AURA searching YouTube and playing a video" width="100%"></a>
 
 ---
 
-## 1. Overview
+## Quick start
 
-You provide a goal in natural language. AURA takes that goal, breaks it down into a chronological sequence of steps, and autonomously executes each step using a suite of native tools (shell execution, filesystem manipulation, web browsing, and raw desktop input). 
+**1. Install**
 
-Unlike simple code-generation tools, AURA operates in an **Observe -> Think -> Act -> Verify** feedback loop. If a test fails, a layout changes, or an error is thrown, AURA reads the output, adjusts its plan, and tries a new approach without needing manual intervention.
+```bash
+pip install "aura-autonomous-agent[all]"   # every tool
+pip install aura-autonomous-agent          # core only: agent loop + shell, file and web tools
+playwright install chromium                # once, for the browser tools
+```
 
-Example Execution Trace:
+**2. Point it at a model.** Any OpenAI-compatible endpoint works. Put this in a `.env` file in your working directory or in `~/.aura/.env`:
+
+```bash
+INFERX_BASE_URL=https://api.openai.com/v1
+INFERX_API_KEY=sk-...
+INFERX_MODEL=gpt-4o-mini
+```
+
+**3. Run it**
+
+```bash
+aura run                                         # interactive session
+aura run "create a Flask app with a /ping endpoint and run it"
+aura learn "check my bank balance"               # record a workflow, get a new tool
+```
+
+**Or call it from Python**
+
+```python
+from aura import Agent
+
+agent = Agent(api_key="sk-...", base_url="https://api.openai.com/v1", model="gpt-4o-mini")
+print(agent.run("create hello.py that prints hi, then run it"))
+```
+
+---
+
+## How it works
+
 ```text
-$ aura run
-
-> Build a simple Flask web hook, write tests, run them, and ensure it passes.
-
-Plan
-  1. Create project directory and initialize Python files.
-  2. Implement Flask app with a basic POST endpoint.
-  3. Write pytest test suite.
-  4. Run tests and self-correct any failures.
-
-Action      bash         $ mkdir hook_test && cd hook_test
-Action      write_file   hook_test/app.py
-Action      write_file   hook_test/test_app.py
-Action      bash         $ cd hook_test && pytest -v
-Observation 1 failed, 0 passed
-Action      patch_file   hook_test/app.py   (Self-Correcting issue)
-Action      bash         $ pytest -v
-Observation 1 passed
+  goal  (typed, spoken with /voice, or passed to Agent.run)
+    |
+    v
++---------------------------+
+|  Planner                  |   one low-temperature LLM call
+|  goal -> up to 10 tasks   |   falls back to [goal] if planning fails
++---------------------------+
+    |  for each task
+    v
++---------------------------+   tool calls    +-----------------------------+
+|  Executor (ReAct loop)    | --------------> |  Tool registry: 35 tools    |
+|  think -> act -> observe  |                 |  shell, files, web,         |
+|  capped at 30 iterations  | <-------------- |  browser, desktop, Google,  |
++---------------------------+   observations  |  learned tools              |
+    |                |                        +-----------------------------+
+    v                v                                      ^
+ Confirmation     Session memory                            |
+ gate (Y/N)       ~/.aura/sessions/*.json         watch-and-learn writes
+                  (resumable)                     new tools here at runtime
 ```
 
----
+**Planner.** A separate LLM call with its own prompt, a 512-token cap and one job: return a JSON list of concrete subtasks. It is a soft dependency; if the endpoint fails or returns malformed JSON, the whole goal runs as a single task.
 
-## 2. Advanced Capabilities
+**Executor.** A ReAct loop. Every request carries the conversation and every tool schema; tool calls are executed and their output is fed back as observations. When the model answers without calling a tool, the task is done. A cap of 30 iterations stops a confused model from looping forever.
 
-AURA goes significantly beyond shell and file manipulation. It incorporates profound systems designed for complex operating workflows:
+**Tool registry.** `aura/tools/` is a plugin package. On first use AURA scans it, imports each module, and registers any `TOOL_DEFS` schema whose function exists. Adding a tool means dropping in one file; there is no central list to edit. Tools whose optional dependencies are missing are skipped, so a core install still works.
 
-### Full-Screen Spatial Desktop Vision
-AURA does not rely purely on text matching or hardcoded coordinates. It features a complete **Desktop Vision Engine** capable of reading the entire screen layout. It generates a structured spatial map of text and UI elements. This allows AURA to:
-- Intelligently understand the visual hierarchy of an application.
-- Perform coordinate-based interaction, scrolling, and hover-based navigation on any application, even those not strictly accessible via an API.
-- Recover from aggressive bot protection or captchas by visually parsing interfaces.
+**Desktop perception.** `desktop_read_screen` screenshots the display and runs it through the native Windows OCR engine, returning every visible line of text with its pixel centroid. The model reads that map and clicks by coordinates. OCR is local and free, so most perception costs no tokens; `desktop_analyze_screen` sends a screenshot to a vision model only when the screen is graphical.
 
-### Imitation Learning ("Watch and Learn")
-AURA can learn directly from your behavior. By activating Imitation Learning, AURA uses `pynput` to listen to your mouse clicks, keyboard inputs, and navigation habits. It captures these user actions and passes them to a Vision-Language Model (VLM) code generation pipeline. 
-This pipeline synthesizes your organic workflow into reusable Python macros utilizing `pyautogui`. Once generated, AURA dynamically registers these new macros at runtime, adding them permanently to its toolchain. 
+**Watch-and-learn.** `aura learn "<goal>"` records your clicks and keystrokes with timestamps plus before and after screenshots. A vision model turns the trace into a Python module with a tool schema and a function, which is saved to `~/.aura/tools/` and registered on the spot. The four tools in [`aura/tools/`](aura/tools) for Bitcoin prices, JioHotstar, Hugging Face search and YouTube ad skipping were generated this way.
 
-### Persistent Browser Automation
-AURA does not just use stateless HTML scraping. It incorporates headless and non-headless browser automation (utilizing Playwright) that integrates directly with your active Chrome profiles. This enables:
-- A deterministic navigation sequence: Launch, focus Chrome, navigate to a target URL, and interact seamlessly.
-- State persistence: Logins and cookies from your active Chrome profile allow AURA to perform tasks as an authenticated user.
-- Real-time interaction with elements like search bars, infinite scrolling feeds, and dynamically generated single-page applications.
+**Safety.** With safe mode on, file writes and shell commands show a confirmation panel first. Deletes, `rm`, `sudo`, `chmod`, `shutdown`, `git push` and package installs always ask, even with safe mode off. Routine mouse and keyboard actions are auto-approved so a 30-click task stays usable.
 
-### Deep Integration Capabilities
-AURA features dedicated automation pipelines for standard office workflows:
-- **Google Meet & Calendar**: Autonomously schedule video conferences, draft meeting agendas, and dynamically email Google Meet links to intended participants.
-- **Google Forms**: Interactively fill out complex web forms relying on a secure, locally-stored user profile and historical context.
+**Resilience.** LLM calls retry up to 3 times with 5 and 10 second backoff on 5xx errors, timeouts and dropped connections, and fail fast on errors that a retry cannot fix, such as a bad key. Sessions are written to disk after every message, so an interrupted run can be resumed with `/resume`.
 
 ---
 
-## 3. Tool Architecture
+## Tools
 
-AURA is equipped with a vast tool registry. The agent decides precisely when and how to deploy these tools.
-
-*   **Filesystem Controls**: Read documents, overwrite source files, incrementally patch files, create/delete directories.
-*   **Shell Controls**: Execute bash or windows command prompt operations. Read STDOUT and STDERR to verify outcomes.
-*   **Web Engine**: Pure HTTP retrieval, localized scraping, and pure web searching to inject research before generating code.
-*   **Desktop Controls**: Control the mouse matrix, simulate keyboard events at the OS level, deploy Windows OCR and Tesseract screen captures.
-*   **Playwright Engine**: Fully capable Chrome orchestration for front-end manipulation.
-
----
-
-## 4. How it Differs from Cloud Coding Assistants
-
-| Feature | Cloud Assistants (e.g., Claude Code, Codex) | AURA |
+| Area | Tools | Install extra |
 | --- | --- | --- |
-| Underlying LLM Engine | Proprietary (Anthropic/OpenAI) | Agnostic / Self-hostable (Any OpenAI-compatible API) |
-| Architecture Philosophy | Reactive to simple instructions | Proactive upfront Task Planning |
-| Desktop & Computer Vision | No | Yes (OS-level Mouse/KB bindings & OCR map generation) |
-| Organic Imitation Learning | No | Yes (Macro generation via pynput/VLM) |
-| Browser Handling | Limited HTML curl | Native Playwright bindings with Profile Persistence |
-| Confirmation Guards | Yes | Yes (Granular Y/N safeguards for Destructive actions) |
-| Complete Autonomy | Low, prompts constantly | High, handles multi-hour execution chains |
+| Shell | `bash` | core |
+| Files | `read_file`, `write_file`, `patch_file`, `list_dir`, `delete_file` | core |
+| Web | `web_search`, `web_fetch` | core |
+| Browser (Playwright) | `browser_navigate`, `browser_click`, `browser_fill`, `browser_get_text`, `browser_screenshot` | `browser` |
+| Desktop | `desktop_click`, `desktop_move_mouse`, `desktop_type`, `desktop_press`, `desktop_scroll`, `desktop_get_position`, `desktop_read_screen`, `desktop_find_text`, `desktop_analyze_screen` | `desktop` |
+| Gmail | `gmail_send`, `gmail_read_inbox` | `google` |
+| Google Calendar | `calendar_list_events`, `calendar_add_event`, `calendar_delete_event` | `google` |
+| Google Meet | `meet_create` (creates the Meet, the calendar event and emails the link in one call) | `google` |
+| Google Forms | `forms_load_profile`, `forms_update_profile`, `forms_generate_prefill_url` | `google` |
+| Learned by watching | `check_bitcoin_price_coinmarketcap`, `jiohotstar_play`, `search_bloom_model_huggingface`, `skip_youtube_ads` | `desktop` |
+
+Extras combine: `pip install "aura-autonomous-agent[desktop,google]"`. The `voice` extra adds `/voice` speech input and spoken notifications; `all` installs everything.
 
 ---
 
-## 5. Software Architecture
-
-```
-aura/
-|-- __init__.py
-|-- cli.py              Command Line entry point
-|-- ui.py               Rich Terminal UI, spinners, and REPL loop integration
-|-- agent.py            The core LLM prompt loop. Feeds observations back into memory.
-|-- planner.py          Converts overarching instructions into ordered subtask structures.
-|-- memory.py           Abstracts conversation persistence, contextual truncation, and state saving.
-|-- learning.py         Imitation learning loop, VLM code synthesis, and runtime macro injection.
-|-- confirm.py          Prompts human-in-the-loop validation for sys-admin actions.
-|-- config.py           Validates and orchestrates the environment config payload.
-|-- tools/
-    |-- shell.py        Isolated subprocess deployment.
-    |-- filesystem.py   Advanced string manipulation and file targeting.
-    |-- browser.py      AURA browser automation engine targeting Playwright.
-    |-- web.py          General HTTP handlers.
-    |-- desktop.py      Windows/macOS computer vision interface.
-    |-- forms.py        Automated data filling engine.
-    |-- meet.py         Conference scheduler integration.
-    |-- ...             (various generated action macros)
-```
-
----
-
-## 6. Installation
-
-Provide the necessary execution credentials in a configuration file:
-```bash
-git clone https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant
-cd AURA-Automated-Realtime-Assistant
-cp .env.example .env
-```
-
-### macOS / Linux automated setup
-```bash
-bash install.sh
-source .venv/bin/activate
-aura run
-```
-
-### Windows automated setup
-```bat
-install.bat
-.venv\Scripts\activate
-aura run
-```
-
-### Manual Dependency Installation
-```bash
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[all]"          # Core only: pip install -e .
-playwright install chromium      # To support browser tooling
-```
-
-### Optional extras
-
-The core install covers the agent loop plus shell, file and web tools. Everything else is an extra, and tools whose extra isn't installed are simply skipped:
-
-| Extra | Adds |
-| --- | --- |
-| `browser` | Playwright browser automation |
-| `desktop` | Mouse/keyboard control, screen OCR (Windows), watch-and-learn recording |
-| `voice` | `/voice` speech input and spoken notifications |
-| `google` | Gmail, Calendar, Meet and Forms tools |
-| `all` | Everything above |
-
-```bash
-pip install -e ".[desktop,google]"
-```
-
-### Use AURA as a Python library
-
-```bash
-pip install aura-autonomous-agent            # core
-pip install "aura-autonomous-agent[all]"     # every tool
-```
+## Python library
 
 ```python
 from aura import Agent
 
 agent = Agent(
-    api_key="sk-...",                         # or set INFERX_API_KEY
-    base_url="https://api.openai.com/v1",     # any OpenAI-compatible endpoint
+    api_key="sk-...",                       # or INFERX_API_KEY
+    base_url="https://api.openai.com/v1",   # any OpenAI-compatible endpoint
     model="gpt-4o-mini",
+    verbose=False,                          # no terminal output
+    approve=lambda action, detail: False,   # decline risky actions instead of prompting
 )
-print(agent.run("create hello.py that prints hi, then run it"))
+
+print(agent.plan("set up a FastAPI project with tests"))   # just the plan
+result = agent.run("set up a FastAPI project with tests")  # plan and execute
 ```
 
-Give the agent your own tools. The schema is built from the function signature:
+**Add your own tools.** Any function becomes a tool; the schema is built from its signature and docstring.
 
 ```python
 @agent.add_tool
 def get_order_status(order_id: str) -> str:
     """Look up an order's shipping status."""
-    return lookup(order_id)
+    return orders.status(order_id)
+
+agent.run("has order 1042 shipped yet?")
 ```
 
-Useful options:
-
-- `plan=False` skips the planner and runs the goal as a single task.
-- `verbose=False` turns off the terminal output.
-- `approve=callback` replaces the Y/N prompt for risky actions, for scripts with no terminal: `approve=lambda action, detail: False` declines everything. `safe_mode` and `approve` apply to the whole process.
-- `agent.plan(goal)` returns the planned subtasks without running them, and `agent.tools` lists the available tool names.
-
-Importing `aura` never needs an API key; `Agent()` raises `aura.ConfigError` with setup instructions if none is configured.
-
----
-
-## 7. Configuration Details
-
-Modify your locally generated `.env` file to dictate how AURA behaves.
-
-| Variable | Description | Example Default |
+| `Agent(...)` option | Default | Purpose |
 | --- | --- | --- |
-| INFERX_BASE_URL | Base URL of the endpoint | https://api.openai.com/v1 |
-| INFERX_API_KEY | Authorization API key | sk-xxx (Required) |
-| INFERX_MODEL | Targeting Model | gemma-4-31b |
-| AURA_SAFE_MODE | Demand human verification for destructive tool deployments | true |
-| AURA_HOME | Where sessions, learned tools, Google credentials and the form profile live | ~/.aura |
-| AURA_CHROME_PROFILE | Chrome profile used by the browser tool | your OS's default Chrome profile |
-| AURA_USER_NAME | Name used in the spoken "task completed" message | (none) |
+| `api_key`, `base_url`, `model` | from environment | LLM endpoint |
+| `plan` | `True` | `False` runs the goal as a single task without the planner |
+| `max_iterations` | `30` | Executor loop cap per task |
+| `safe_mode` | `AURA_SAFE_MODE` | Ask before writes and shell commands |
+| `approve` | interactive prompt | `callback(action, detail) -> bool` for scripts with no terminal |
+| `verbose` | `True` | Rich terminal output |
+| `session_id` | new session | Resume a saved session |
+| `client` | built for you | Inject your own OpenAI-compatible client |
 
-AURA reads `.env` from the current directory, then `~/.aura/.env`, then the source checkout. Google `credentials.json`/`token.json` and `user_profile.json` are read from the checkout root if they're already there, otherwise from `AURA_HOME`.
+`agent.tools` lists every available tool name. Importing `aura` never needs an API key; creating an `Agent` without one raises `aura.ConfigError` with setup instructions.
 
 ---
 
-## 8. Platform Specific Setup and Troubleshooting
+## CLI
 
-### macOS (Apple Silicon & Intel)
-The `pyaudio` and `SpeechRecognition` libraries require native system dependencies in order to parse host-level audio successfully. The `install.sh` sequence usually handles this via Homebrew. If you prefer to install manually:
+| Command | What it does |
+| --- | --- |
+| `aura run` | Interactive session in the current directory |
+| `aura run "<goal>"` | Run one goal and exit |
+| `aura learn "<goal>"` | Record a workflow and generate a new tool from it |
+| `aura version` | Show the version |
+
+Inside a session:
+
+| Command | What it does |
+| --- | --- |
+| `/voice` | Speak the next goal instead of typing it |
+| `/learn <goal>` | Record a workflow and generate a new tool |
+| `/tools` | List available tools |
+| `/sessions` | List past sessions |
+| `/resume` | Resume a previous session |
+| `/clear` | Clear the conversation |
+| `/cwd` | Show the working directory |
+| `/help` | Show all commands |
+| `/exit` | Quit |
+
+---
+
+## Configuration
+
+Settings come from environment variables or a `.env` file, read from the current directory, then `~/.aura/.env`, then the source checkout.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `INFERX_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint |
+| `INFERX_API_KEY` | required | API key |
+| `INFERX_MODEL` | `gemma-4-31b` | Model name |
+| `AURA_SAFE_MODE` | `true` | Ask before writes and shell commands |
+| `AURA_HOME` | `~/.aura` | Sessions, learned tools, Google credentials and the form profile |
+| `AURA_CHROME_PROFILE` | your OS's Chrome profile | Profile used by the browser tools |
+| `AURA_USER_NAME` | none | Name used in the spoken "task completed" message |
+
+**Google tools.** Create an OAuth client (Desktop app) in Google Cloud with the Gmail and Calendar APIs enabled and save it as `~/.aura/credentials.json`. The first Google tool call opens a browser to sign in and stores `token.json` next to it.
+
+---
+
+## Install from source
 
 ```bash
-# Needed for internal audio processing and /voice commands
-brew install portaudio flac
-pip install -e .
+git clone https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant
+cd AURA-Automated-Realtime-Assistant
+cp .env.example .env
 
-# Manual Fix: SpeechRecognition on Apple Silicon ships an x86 flac binary by default.
-# The following script explicitly assigns the native ARM flac binary to the Python package.
-FLAC_DST=".venv/lib/$(python3 -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/speech_recognition/flac-mac"
-cp /opt/homebrew/bin/flac "$FLAC_DST"
+bash install.sh          # macOS / Linux
+install.bat              # Windows
 ```
 
-### Windows
-Normally all dependencies correctly install via typical `pip` channels. On some environments `pyaudio` lacks a pre-compiled wheel for your python distribution:
-```bat
-pip install pipwin
-pipwin install pyaudio
-```
+Or manually:
 
-*Note: The native `desktop_find_text` and vision toolkit incorporates Windows native UI SDK (`winsdk`) for OCR, running exceptionally fast on Windows environments. Cross-platform counterparts substitute internal libraries as needed.*
-
----
-
-## 9. Comprehensive CLI & REPL Commands
-
-Initiating the CLI:
-
-| CLI arguments | Output |
-| --- | --- |
-| `aura run` | Starts the interactive continuous session |
-| `aura run "Target Context"` | Submits a single task instruction, completes it, and exits |
-| `aura version` | Display tool version information |
-
-In-session Agent REPL Controls:
-
-| Target Command | Execution Result |
-| --- | --- |
-| `/voice` | Engages Speech-To-Text pipeline for hands-free queries |
-| `/help` | Explains all commands |
-| `/clear` | Generates a clean slate by purging the context window |
-| `/sessions` | Parses and lists serialized past execution chains |
-| `/resume` | Hooks an old execution chain back into the present context |
-| `/tools` | Dumps the locally detected tool payloads |
-| `/learn` | Manually invokes the Imitation Learning capture stream |
-| `/cwd` | Returns the current scope path |
-| `/exit` | Gracefully terminate |
-
----
-
-## 10. Verification & Tests
-
-To run the verification suite and ensure that your host configuration has correctly bonded with AURA's toolkit:
 ```bash
-# Validates local filesystem, shell, and offline capability functions
-python tests/test_tools.py
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e ".[all,dev]"
+playwright install chromium
+```
 
-# Validates connectivity and handshakes with the inference server
-python tests/test_endpoint.py
+**Platform notes**
+
+- Screen OCR (`desktop_read_screen`, `desktop_find_text`) uses the Windows OCR engine and is Windows only. Mouse and keyboard control work on Windows, macOS and Linux.
+- macOS: `/voice` needs `brew install portaudio flac`. On Apple Silicon, SpeechRecognition ships an x86 `flac`; replace it with the native one:
+  ```bash
+  cp /opt/homebrew/bin/flac "$(python -c 'import speech_recognition, os; print(os.path.dirname(speech_recognition.__file__))')/flac-mac"
+  ```
+- Windows: if `pyaudio` has no wheel for your Python, run `pip install pipwin` and then `pipwin install pyaudio`.
+
+---
+
+## Project structure
+
+```text
+aura/
+  agent.py        Agent class and the ReAct executor loop
+  planner.py      Goal to subtask planner
+  tools/          Plugin registry and every built-in tool, one module per area
+  learning.py     Watch-and-learn recorder and tool generator
+  confirm.py      Human-in-the-loop confirmation gate
+  memory.py       Session persistence and resume
+  config.py       Settings, .env loading and data paths
+  ui.py           Interactive terminal session
+  cli.py          `aura` command entry point
+tests/
+  test_library.py   Library API tests against a fake LLM client (no key needed)
+  test_tools.py     Tool checks for shell, files, web, config and memory
+  test_endpoint.py  Connectivity check for your LLM endpoint
+```
+
+## Testing
+
+```bash
+pytest tests/test_library.py     # no API key or network needed
+python tests/test_tools.py       # tool checks
+python tests/test_endpoint.py    # checks your configured endpoint
 ```
 
 ---
 
-## 11. Dependencies List
+## Roadmap
 
-AURA bridges multiple complex open-source libraries.
+- Learned tools that locate targets with OCR instead of fixed coordinates, so they survive layout changes
+- Long-term memory across sessions with vector search
+- Context compaction for long multi-step runs
+- Sandboxed execution in a container or virtual desktop for unattended use
+- A web dashboard to watch runs and approve actions remotely
 
-| Package | Purpose | Platform |
-| --- | --- | --- |
-| **openai** | Universal mapping to standard LLM endpoints | All |
-| **rich** | Renders formatted syntax, tables, and progress indicators | All |
-| **requests** | Low level network manipulation and API access | All |
-| **beautifulsoup4** | Standardizing HTML trees | All |
-| **playwright** | Deep orchestration of WebKit and Chromium processes | All |
-| **python-dotenv** | Inject configurations to the environment safely | All |
-| **PyAutoGUI** | Abstraction of mouse and keyboard simulations | All |
-| **pynput** | Hardware hook extraction for Imitation Learning algorithms | All |
-| **Pillow** | Memory processing of visual data and screen captures | All |
-| **SpeechRecognition** | Decodes array segments to semantic strings | All |
-| **pyaudio** | Live PCM translation from active system microphones | All |
-| **pyttsx3** | Local text-to-voice synthesization | All |
-| **winsdk** | Native, ultra-low-latency OCR engine mappings | Windows |
+## Authors
 
----
+Built by [Abhishek Pandey](https://github.com/abhishek-pandey7) and Atharva Bhargava.
 
-## 13. Future Scope
+## License
 
-AURA is under active development. Our roadmap for future enhancements includes:
-
-*   **Multi-Agent Orchestration**: Enabling multiple AURA instances to collaborate on large-scale engineering projects.
-*   **Long-term Memory (RAG)**: Implementing a vector-based persistent memory system to allow the agent to remember project contexts and user preferences across multiple months.
-*   **Cloud-Native Deployment**: Simplified, one-click deployment templates for AWS, GCP, and Azure with pre-configured virtual desktop environments (VNC/RDP) for vision-based tasks.
-*   **Dockerized Infrastructure**: A fully containerized version of AURA designed for high-availability execution in CI/CD pipelines and remote clusters.
-*   **Web Dashboard**: A central management interface to monitor execution traces, manage secrets, and interact with remote AURA instances via a web browser.
-*   **Native IDE Plugins**: Deep integration with VS Code and JetBrains for a more seamless "pair programming" experience.
-
+[MIT](LICENSE)
