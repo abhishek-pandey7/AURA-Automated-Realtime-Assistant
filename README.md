@@ -16,7 +16,7 @@ Prompt: *"open linkedin and make a post on the rabbit and the hare"*
 
 AURA opens Chrome on the logged-in profile, writes the story into the post composer, and clicks Post.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4)
 
@@ -26,7 +26,7 @@ Prompt (spoken via `/voice`): *"give me CNN code for mnist dataset"*
 
 AURA transcribes the request, plans it, and writes a complete PyTorch MNIST CNN with data loading, model, training and evaluation.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4)
 
@@ -36,7 +36,7 @@ Prompt: *"open jiohotstar, search for RCB vs DC highlights and play the first vi
 
 AURA launches the app from the Start menu, searches for the match, and starts playback.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4)
 
@@ -46,7 +46,7 @@ Prompt: *"open youtube, search for sidemen and play the first youtube video"*
 
 AURA opens the browser, runs the search, and plays the top result.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4)
 
