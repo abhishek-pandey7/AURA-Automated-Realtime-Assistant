@@ -1,15 +1,16 @@
 import json
-import os
 import time
-import httpx
-from openai import OpenAI
-from aura.config import INFERX_BASE_URL, INFERX_API_KEY, INFERX_MODEL
+from aura import config
 
-_client = OpenAI(
-    base_url=INFERX_BASE_URL,
-    api_key=INFERX_API_KEY,
-    timeout=httpx.Timeout(timeout=120.0, connect=15.0),
-)
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from aura.agent import make_client
+        _client = make_client(timeout=120.0)
+    return _client
 
 PLANNER_SYSTEM = """You are a task planner for AURA, an autonomous CLI agent.
 The user gives you a goal. You must break it into a clear list of concrete subtasks.
@@ -37,16 +38,17 @@ Rules:
 """
 
 
-def plan(goal: str, cwd: str) -> list[str]:
+def plan(goal: str, cwd: str, *, client=None, model: str | None = None) -> list[str]:
     """
     Takes a user goal, returns an ordered list of subtask strings.
     Falls back to treating the goal as a single task if LLM fails.
     """
     try:
+        client = client or _get_client()
         for attempt in range(3):
             try:
-                response = _client.chat.completions.create(
-                    model=INFERX_MODEL,
+                response = client.chat.completions.create(
+                    model=model or config.INFERX_MODEL,
                     max_tokens=512,
                     messages=[
                         {"role": "system", "content": PLANNER_SYSTEM},
