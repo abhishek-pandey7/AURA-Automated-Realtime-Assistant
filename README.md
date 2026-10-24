@@ -210,6 +210,11 @@ pip install -e ".[desktop,google]"
 
 ### Use AURA as a Python library
 
+```bash
+pip install aura-autonomous-agent            # core
+pip install "aura-autonomous-agent[all]"     # every tool
+```
+
 ```python
 from aura import Agent
 
