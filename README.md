@@ -8,34 +8,47 @@ From writing complete projects in an IDE to utilizing custom computer vision for
 
 ## Demos
 
-Each clip is one prompt typed (or spoken) into `aura run`; AURA plans the steps and does the rest on its own. Previews are sped up — click one to watch the full recording.
+Each clip is a single prompt typed (or spoken) into `aura run`. AURA plans the steps and carries them out on its own. The previews are sped up, so click any of them to watch the full recording.
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="docs/demos/linkedin.gif" alt="AURA writing and publishing a LinkedIn post"></a>
-      <br><b>Writes and publishes a LinkedIn post</b>
-      <br><sub><i>"open linkedin and make a post on the rabbit and the hare"</i> — opens Chrome on the logged-in profile, writes the story into the composer, and clicks Post.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="docs/demos/voice-cnn.gif" alt="AURA turning a voice command into a PyTorch CNN file"></a>
-      <br><b>Voice to code</b>
-      <br><sub><code>/voice</code> → <i>"give me CNN code for mnist dataset"</i> — transcribes the request, plans it, and writes a complete PyTorch MNIST CNN (data loading, model, training and evaluation).</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="docs/demos/jiohotstar.gif" alt="AURA opening JioHotstar and playing IPL highlights"></a>
-      <br><b>Finds and plays IPL highlights on JioHotstar</b>
-      <br><sub><i>"open jiohotstar, search for RCB vs DC highlights and play the first video"</i> — launches the app from the Start menu, searches, and starts playback.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="docs/demos/youtube.gif" alt="AURA searching YouTube and playing the first video"></a>
-      <br><b>Searches YouTube and plays a video</b>
-      <br><sub><i>"open youtube, search for sidemen and play the first youtube video"</i> — opens the browser, runs the search, and plays the top result.</sub>
-    </td>
-  </tr>
-</table>
+### 1. Writes and publishes a LinkedIn post
+
+Prompt: *"open linkedin and make a post on the rabbit and the hare"*
+
+AURA opens Chrome on the logged-in profile, writes the story into the post composer, and clicks Post.
+
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
+
+[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4)
+
+### 2. Voice to code
+
+Prompt (spoken via `/voice`): *"give me CNN code for mnist dataset"*
+
+AURA transcribes the request, plans it, and writes a complete PyTorch MNIST CNN with data loading, model, training and evaluation.
+
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
+
+[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4)
+
+### 3. Finds and plays IPL highlights on JioHotstar
+
+Prompt: *"open jiohotstar, search for RCB vs DC highlights and play the first video"*
+
+AURA launches the app from the Start menu, searches for the match, and starts playback.
+
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
+
+[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4)
+
+### 4. Searches YouTube and plays a video
+
+Prompt: *"open youtube, search for sidemen and play the first youtube video"*
+
+AURA opens the browser, runs the search, and plays the top result.
+
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
+
+[Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4)
 
 ---
 
