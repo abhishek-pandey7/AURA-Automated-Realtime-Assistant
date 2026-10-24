@@ -11,7 +11,7 @@ from rich.console import Console
 import httpx
 from openai import OpenAI
 
-from aura.config import INFERX_BASE_URL, INFERX_API_KEY, INFERX_MODEL
+from aura import config
 
 console = Console()
 
@@ -81,8 +81,8 @@ class Recorder:
 
 def generate_tool_code(goal: str, events: list[str], start_img: str, end_img: str) -> str | None:
     client = OpenAI(
-        base_url=INFERX_BASE_URL,
-        api_key=INFERX_API_KEY,
+        base_url=config.INFERX_BASE_URL,
+        api_key=config.require_api_key(),
         timeout=httpx.Timeout(timeout=180.0, connect=15.0),
     )
     
@@ -119,7 +119,7 @@ Do NOT enclose your output in ```python ... ```, literally output only code.
 
     try:
         response = client.chat.completions.create(
-            model=INFERX_MODEL,
+            model=config.INFERX_MODEL,
             max_tokens=2048,
             messages=messages,
             temperature=0.1,
@@ -158,8 +158,7 @@ def learn_workflow(goal: str, duration: int = 60):
     tool_name = match.group(1)
     
     import aura.tools
-    tools_dir = Path(aura.tools.__file__).resolve().parent
-    file_path = tools_dir / f"{tool_name}.py"
+    file_path = config.user_tools_dir() / f"{tool_name}.py"
     
     try:
         file_path.write_text(code, encoding="utf-8")
