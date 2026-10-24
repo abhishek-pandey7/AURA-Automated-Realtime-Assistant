@@ -63,7 +63,7 @@ fi
 source .venv/bin/activate
 
 # ── Install Python dependencies ───────────────────────────────────────────────
-pip install -e . --quiet
+pip install -e ".[all]" --quiet
 echo "  ✓ AURA package installed"
 
 # ── macOS arm64: fix SpeechRecognition bundled flac binary ──────────────────

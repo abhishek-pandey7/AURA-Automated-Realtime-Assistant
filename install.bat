@@ -33,7 +33,7 @@ if not exist ".venv" (
 call .venv\Scripts\activate.bat
 
 :: ── Install Python dependencies ──────────────────────────────────────────────
-pip install -e . --quiet
+pip install -e ".[all]" --quiet
 if errorlevel 1 (
     echo   X Failed to install AURA. Check the error above.
     exit /b 1

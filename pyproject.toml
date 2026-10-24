@@ -1,33 +1,63 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "aura-agent"
-version = "0.1.0"
+version = "0.2.0"
+description = "Autonomous agent that plans a goal and carries it out with shell, file, web, browser, Google Workspace and desktop tools."
+readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+    { name = "Abhishek Pandey" },
+    { name = "Atharva Bhargava" },
+]
+keywords = ["agent", "llm", "automation", "react", "desktop-automation", "openai"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Core: the agent loop plus shell, file and web tools. Everything heavier is an extra;
+# tools whose extra isn't installed are skipped at startup.
 dependencies = [
     "openai>=1.0.0",
+    "httpx>=0.24.0",
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.0",
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",
-    "playwright>=1.40.0",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.40.0"]
+desktop = [
     "PyAutoGUI>=0.9.54",
     "Pillow>=10.0.0",
+    "pynput>=1.7.6",
     "winsdk>=1.0.0b10; sys_platform == 'win32'",
+]
+voice = [
     "SpeechRecognition>=3.10.0",
     "pyaudio>=0.2.14",
     "pyttsx3>=2.90",
+]
+google = [
     "google-api-python-client>=2.100.0",
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.0.0",
-    "pynput>=1.7.6",
 ]
+all = ["aura-agent[browser,desktop,voice,google]"]
+dev = ["pytest>=8.0", "build>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant"
+Repository = "https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant"
 
 [project.scripts]
 aura = "aura.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["aura"]
+include = ["aura", "aura.*"]
