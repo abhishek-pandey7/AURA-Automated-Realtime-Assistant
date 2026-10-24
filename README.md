@@ -16,7 +16,7 @@ Prompt: *"open linkedin and make a post on the rabbit and the hare"*
 
 AURA opens Chrome on the logged-in profile, writes the story into the post composer, and clicks Post.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/linkedin.gif" alt="Writes and publishes a LinkedIn post" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-automatedlinkedinpost.mp4)
 
@@ -26,7 +26,7 @@ Prompt (spoken via `/voice`): *"give me CNN code for mnist dataset"*
 
 AURA transcribes the request, plans it, and writes a complete PyTorch MNIST CNN with data loading, model, training and evaluation.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/voice-cnn.gif" alt="Voice to code" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-multimodality-voice%20to%20cnn%20code.mp4)
 
@@ -36,7 +36,7 @@ Prompt: *"open jiohotstar, search for RCB vs DC highlights and play the first vi
 
 AURA launches the app from the Start menu, searches for the match, and starts playback.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/jiohotstar.gif" alt="Finds and plays IPL highlights on JioHotstar" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20jiohotstar%20and%20plays%20ipl%20match%20highlights%20on%20its%20own.mp4)
 
@@ -46,7 +46,7 @@ Prompt: *"open youtube, search for sidemen and play the first youtube video"*
 
 AURA opens the browser, runs the search, and plays the top result.
 
-<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
+<a href="https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4"><img src="https://raw.githubusercontent.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant/main/docs/demos/youtube.gif" alt="Searches YouTube and plays a video" width="100%"></a>
 
 [Watch the full video](https://github.com/abhishek-pandey7/Abhisheks-Zone/blob/main/public/videos/aura-opens%20youtube%20searches%20for%20a%20channel%20and%20plays%20the%20first%20vid.mp4)
 
@@ -165,8 +165,8 @@ aura/
 
 Provide the necessary execution credentials in a configuration file:
 ```bash
-git clone https://github.com/abhishek-pandey7/AURA---Automated-Realtime-Assistant
-cd AURA---Automated-Realtime-Assistant
+git clone https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant
+cd AURA-Automated-Realtime-Assistant
 cp .env.example .env
 ```
 
@@ -188,9 +188,56 @@ aura run
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[all]"          # Core only: pip install -e .
 playwright install chromium      # To support browser tooling
 ```
+
+### Optional extras
+
+The core install covers the agent loop plus shell, file and web tools. Everything else is an extra, and tools whose extra isn't installed are simply skipped:
+
+| Extra | Adds |
+| --- | --- |
+| `browser` | Playwright browser automation |
+| `desktop` | Mouse/keyboard control, screen OCR (Windows), watch-and-learn recording |
+| `voice` | `/voice` speech input and spoken notifications |
+| `google` | Gmail, Calendar, Meet and Forms tools |
+| `all` | Everything above |
+
+```bash
+pip install -e ".[desktop,google]"
+```
+
+### Use AURA as a Python library
+
+```python
+from aura import Agent
+
+agent = Agent(
+    api_key="sk-...",                         # or set INFERX_API_KEY
+    base_url="https://api.openai.com/v1",     # any OpenAI-compatible endpoint
+    model="gpt-4o-mini",
+)
+print(agent.run("create hello.py that prints hi, then run it"))
+```
+
+Give the agent your own tools. The schema is built from the function signature:
+
+```python
+@agent.add_tool
+def get_order_status(order_id: str) -> str:
+    """Look up an order's shipping status."""
+    return lookup(order_id)
+```
+
+Useful options:
+
+- `plan=False` skips the planner and runs the goal as a single task.
+- `verbose=False` turns off the terminal output.
+- `approve=callback` replaces the Y/N prompt for risky actions, for scripts with no terminal: `approve=lambda action, detail: False` declines everything. `safe_mode` and `approve` apply to the whole process.
+- `agent.plan(goal)` returns the planned subtasks without running them, and `agent.tools` lists the available tool names.
+
+Importing `aura` never needs an API key; `Agent()` raises `aura.ConfigError` with setup instructions if none is configured.
 
 ---
 
@@ -204,6 +251,11 @@ Modify your locally generated `.env` file to dictate how AURA behaves.
 | INFERX_API_KEY | Authorization API key | sk-xxx (Required) |
 | INFERX_MODEL | Targeting Model | gemma-4-31b |
 | AURA_SAFE_MODE | Demand human verification for destructive tool deployments | true |
+| AURA_HOME | Where sessions, learned tools, Google credentials and the form profile live | ~/.aura |
+| AURA_CHROME_PROFILE | Chrome profile used by the browser tool | your OS's default Chrome profile |
+| AURA_USER_NAME | Name used in the spoken "task completed" message | (none) |
+
+AURA reads `.env` from the current directory, then `~/.aura/.env`, then the source checkout. Google `credentials.json`/`token.json` and `user_profile.json` are read from the checkout root if they're already there, otherwise from `AURA_HOME`.
 
 ---
 

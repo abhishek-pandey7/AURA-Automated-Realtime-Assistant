@@ -1,14 +1,23 @@
 from rich.console import Console
 from rich.panel import Panel
 from rich import box
-from aura.config import SAFE_MODE, ALWAYS_CONFIRM_PATTERNS
+from aura import config
 
 console = Console()
+
+# Optional callback (action_type, detail) -> bool that replaces the interactive Y/N prompt,
+# for library use where there's no terminal to ask in.
+_approver = None
+
+
+def set_approver(func):
+    global _approver
+    _approver = func
 
 
 def _is_dangerous(action: str) -> bool:
     action_lower = action.lower()
-    return any(p in action_lower for p in ALWAYS_CONFIRM_PATTERNS)
+    return any(p in action_lower for p in config.ALWAYS_CONFIRM_PATTERNS)
 
 
 def confirm_action(action_type: str, detail: str, force: bool = False) -> bool:
@@ -20,8 +29,11 @@ def confirm_action(action_type: str, detail: str, force: bool = False) -> bool:
     dangerous = _is_dangerous(detail)
 
     # Skip confirmation if safe mode is off AND action isn't in always-confirm list
-    if not SAFE_MODE and not dangerous and not force:
+    if not config.SAFE_MODE and not dangerous and not force:
         return True
+
+    if _approver is not None:
+        return bool(_approver(action_type, detail))
 
     # Color coding
     if dangerous:

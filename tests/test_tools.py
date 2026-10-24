@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 # Add project root to path so imports work without installing
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PASS = "  ✓"
 FAIL = "  ✗"
@@ -139,8 +139,8 @@ test("config: .env file exists", _test_env_present)
 print("\nTool registry:")
 
 def _test_tool_defs_not_empty():
-    from aura.tools import ALL_TOOL_DEFS
-    assert len(ALL_TOOL_DEFS) >= 10, f"Only {len(ALL_TOOL_DEFS)} tools registered"
+    from aura.tools import get_tool_defs
+    assert len(get_tool_defs()) >= 10, f"Only {len(get_tool_defs())} tools registered"
 
 def _test_dispatch_unknown():
     from aura.tools import dispatch
@@ -148,8 +148,8 @@ def _test_dispatch_unknown():
     assert "unknown" in out.lower()
 
 def _test_all_tools_have_names():
-    from aura.tools import ALL_TOOL_DEFS
-    for t in ALL_TOOL_DEFS:
+    from aura.tools import get_tool_defs
+    for t in get_tool_defs():
         name = t.get("function", {}).get("name")
         assert name, f"Tool missing name: {t}"
 

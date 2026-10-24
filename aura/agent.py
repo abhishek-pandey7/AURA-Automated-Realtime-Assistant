@@ -9,20 +9,33 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich import box
 
-from aura.config import INFERX_BASE_URL, INFERX_API_KEY, INFERX_MODEL
+from aura import config
 from aura.memory import Memory
-from aura.tools import ALL_TOOL_DEFS, dispatch
+from aura.tools import dispatch, get_tool_defs, register_tool
 
 console = Console()
 
-# Generous timeout: Render free-tier can be slow on cold starts.
-# connect=15s  (time to establish TCP connection)
-# read=180s    (time to receive the full streamed response)
-_client = OpenAI(
-    base_url=INFERX_BASE_URL,
-    api_key=INFERX_API_KEY,
-    timeout=httpx.Timeout(timeout=180.0, connect=15.0),
-)
+
+def make_client(api_key: str | None = None, base_url: str | None = None,
+                timeout: float = 180.0) -> OpenAI:
+    # Generous timeout: Render free-tier can be slow on cold starts.
+    # connect=15s  (time to establish TCP connection)
+    # read=180s    (time to receive the full streamed response)
+    return OpenAI(
+        base_url=base_url or config.INFERX_BASE_URL,
+        api_key=config.require_api_key(api_key),
+        timeout=httpx.Timeout(timeout=timeout, connect=15.0),
+    )
+
+
+_default_client = None
+
+
+def _get_default_client() -> OpenAI:
+    global _default_client
+    if _default_client is None:
+        _default_client = make_client()
+    return _default_client
 
 SYSTEM_PROMPT = """You are AURA (Automated Realtime Assistant), an autonomous CLI agent running on the user's machine.
 Your job is to complete tasks by using tools — not just describe what to do.
@@ -93,12 +106,16 @@ CRITICAL DESKTOP RULES:
 """
 
 
-def run_agent(goal: str, memory: Memory, max_iterations: int = 30) -> str:
+def run_agent(goal: str, memory: Memory, max_iterations: int = 30, *,
+              client: OpenAI | None = None, model: str | None = None,
+              console: Console = console) -> str:
     """
     Core observe → think → act loop.
     Runs until the LLM stops calling tools (task done) or max_iterations hit.
     Returns the final summary string.
     """
+    client = client or _get_default_client()
+    model = model or config.INFERX_MODEL
     cwd = os.getcwd()
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     os_name = platform.system()  # "Windows", "Linux", "Darwin"
@@ -115,14 +132,14 @@ def run_agent(goal: str, memory: Memory, max_iterations: int = 30) -> str:
             last_error = None
             for p_retry in range(3):
                 try:
-                    response = _client.chat.completions.create(
-                        model=INFERX_MODEL,
+                    response = client.chat.completions.create(
+                        model=model,
                         max_tokens=4096,
                         messages=[
                             {"role": "system", "content": system},
                             *memory.get_messages(),
                         ],
-                        tools=ALL_TOOL_DEFS,
+                        tools=get_tool_defs(),
                         tool_choice="auto",
                         temperature=0.3,
                     )
@@ -209,9 +226,9 @@ def run_agent(goal: str, memory: Memory, max_iterations: int = 30) -> str:
                 except Exception:
                     tool_inputs = {}
 
-            _print_tool_call(tool_name, tool_inputs)
+            _print_tool_call(tool_name, tool_inputs, console)
             result = dispatch(tool_name, tool_inputs)
-            _print_tool_result(tool_name, result)
+            _print_tool_result(tool_name, result, console)
 
             tool_result_contents.append({
                 "type": "tool_result",
@@ -254,7 +271,7 @@ def run_agent(goal: str, memory: Memory, max_iterations: int = 30) -> str:
     return "Max iterations reached. Task may be incomplete."
 
 
-def _print_tool_call(name: str, inputs: dict):
+def _print_tool_call(name: str, inputs: dict, console: Console = console):
     color_map = {
         "bash": "yellow",
         "write_file": "cyan",
@@ -305,7 +322,7 @@ def _print_tool_call(name: str, inputs: dict):
     console.print(f"  [bold {color}]▶ {name}[/bold {color}]  [dim]{detail}[/dim]")
 
 
-def _print_tool_result(name: str, result: str):
+def _print_tool_result(name: str, result: str, console: Console = console):
     if not result or result.strip() == "[ no output ]":
         console.print("  [dim]← (no output)[/dim]\n")
         return
@@ -328,3 +345,57 @@ def _print_tool_result(name: str, result: str):
         console.print(f"  [dim]  ... ({len(lines) - 25} more lines hidden)[/dim]")
 
     console.print()
+
+
+class Agent:
+    """AURA as a library: plan a goal, then run the tool-calling loop until it's done.
+
+        from aura import Agent
+
+        agent = Agent(api_key="sk-...", base_url="https://api.openai.com/v1", model="gpt-4o-mini")
+        print(agent.run("create hello.py that prints hi, then run it"))
+
+    Settings not passed in fall back to INFERX_API_KEY / INFERX_BASE_URL / INFERX_MODEL from the
+    environment or a .env file. `safe_mode` and `approve` change process-wide confirmation
+    behaviour, since the tools ask for confirmation through a shared module.
+    """
+
+    def __init__(self, api_key: str | None = None, base_url: str | None = None,
+                 model: str | None = None, *, plan: bool = True, max_iterations: int = 30,
+                 safe_mode: bool | None = None, approve=None, verbose: bool = True,
+                 session_id: str | None = None, client: OpenAI | None = None,
+                 timeout: float = 180.0):
+        from aura import confirm
+
+        self.client = client or make_client(api_key, base_url, timeout)
+        self.model = model or config.INFERX_MODEL
+        self.use_planner = plan
+        self.max_iterations = max_iterations
+        self.memory = Memory(session_id)
+        self.console = Console(quiet=not verbose)
+        if safe_mode is not None:
+            config.SAFE_MODE = safe_mode
+        if approve is not None:
+            confirm.set_approver(approve)
+
+    def plan(self, goal: str) -> list[str]:
+        """Break a goal into ordered subtasks (falls back to [goal] if planning fails)."""
+        from aura import planner
+        return planner.plan(goal, os.getcwd(), client=self.client, model=self.model)
+
+    def run(self, goal: str) -> str:
+        """Plan the goal (unless plan=False), run each subtask, and return the final summary."""
+        tasks = self.plan(goal) if self.use_planner else [goal]
+        result = ""
+        for task in tasks:
+            result = run_agent(task, self.memory, self.max_iterations,
+                               client=self.client, model=self.model, console=self.console)
+        return result
+
+    def add_tool(self, func, schema: dict | None = None, description: str | None = None):
+        """Expose a Python function to the agent as a tool. Usable as a decorator."""
+        return register_tool(func, schema, description)
+
+    @property
+    def tools(self) -> list[str]:
+        return [d["function"]["name"] for d in get_tool_defs()]
