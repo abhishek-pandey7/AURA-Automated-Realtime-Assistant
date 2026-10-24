@@ -165,8 +165,8 @@ aura/
 
 Provide the necessary execution credentials in a configuration file:
 ```bash
-git clone https://github.com/abhishek-pandey7/AURA---Automated-Realtime-Assistant
-cd AURA---Automated-Realtime-Assistant
+git clone https://github.com/abhishek-pandey7/AURA-Automated-Realtime-Assistant
+cd AURA-Automated-Realtime-Assistant
 cp .env.example .env
 ```
 
@@ -188,9 +188,56 @@ aura run
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[all]"          # Core only: pip install -e .
 playwright install chromium      # To support browser tooling
 ```
+
+### Optional extras
+
+The core install covers the agent loop plus shell, file and web tools. Everything else is an extra, and tools whose extra isn't installed are simply skipped:
+
+| Extra | Adds |
+| --- | --- |
+| `browser` | Playwright browser automation |
+| `desktop` | Mouse/keyboard control, screen OCR (Windows), watch-and-learn recording |
+| `voice` | `/voice` speech input and spoken notifications |
+| `google` | Gmail, Calendar, Meet and Forms tools |
+| `all` | Everything above |
+
+```bash
+pip install -e ".[desktop,google]"
+```
+
+### Use AURA as a Python library
+
+```python
+from aura import Agent
+
+agent = Agent(
+    api_key="sk-...",                         # or set INFERX_API_KEY
+    base_url="https://api.openai.com/v1",     # any OpenAI-compatible endpoint
+    model="gpt-4o-mini",
+)
+print(agent.run("create hello.py that prints hi, then run it"))
+```
+
+Give the agent your own tools. The schema is built from the function signature:
+
+```python
+@agent.add_tool
+def get_order_status(order_id: str) -> str:
+    """Look up an order's shipping status."""
+    return lookup(order_id)
+```
+
+Useful options:
+
+- `plan=False` skips the planner and runs the goal as a single task.
+- `verbose=False` turns off the terminal output.
+- `approve=callback` replaces the Y/N prompt for risky actions, for scripts with no terminal: `approve=lambda action, detail: False` declines everything. `safe_mode` and `approve` apply to the whole process.
+- `agent.plan(goal)` returns the planned subtasks without running them, and `agent.tools` lists the available tool names.
+
+Importing `aura` never needs an API key; `Agent()` raises `aura.ConfigError` with setup instructions if none is configured.
 
 ---
 
@@ -204,6 +251,11 @@ Modify your locally generated `.env` file to dictate how AURA behaves.
 | INFERX_API_KEY | Authorization API key | sk-xxx (Required) |
 | INFERX_MODEL | Targeting Model | gemma-4-31b |
 | AURA_SAFE_MODE | Demand human verification for destructive tool deployments | true |
+| AURA_HOME | Where sessions, learned tools, Google credentials and the form profile live | ~/.aura |
+| AURA_CHROME_PROFILE | Chrome profile used by the browser tool | your OS's default Chrome profile |
+| AURA_USER_NAME | Name used in the spoken "task completed" message | (none) |
+
+AURA reads `.env` from the current directory, then `~/.aura/.env`, then the source checkout. Google `credentials.json`/`token.json` and `user_profile.json` are read from the checkout root if they're already there, otherwise from `AURA_HOME`.
 
 ---
 
