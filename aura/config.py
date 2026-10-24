@@ -24,7 +24,7 @@ ALWAYS_CONFIRM_PATTERNS = [
     "git push", "pip install", "npm install",
 ]
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 
 class ConfigError(RuntimeError):

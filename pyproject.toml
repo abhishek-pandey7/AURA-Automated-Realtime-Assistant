@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aura-autonomous-agent"
-version = "0.2.0"
+version = "0.2.1"
 description = "Autonomous agent that plans a goal and carries it out with shell, file, web, browser, Google Workspace and desktop tools."
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,6 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
     { name = "Abhishek Pandey" },
-    { name = "Atharva Bhargava" },
 ]
 keywords = ["agent", "llm", "automation", "react", "desktop-automation", "openai"]
 classifiers = [

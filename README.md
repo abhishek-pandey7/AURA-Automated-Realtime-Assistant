@@ -331,7 +331,7 @@ python tests/test_endpoint.py    # checks your configured endpoint
 
 ## Authors
 
-Built by [Abhishek Pandey](https://github.com/abhishek-pandey7) and Atharva Bhargava.
+Built by [Abhishek Pandey](https://github.com/abhishek-pandey7).
 
 ## License
 

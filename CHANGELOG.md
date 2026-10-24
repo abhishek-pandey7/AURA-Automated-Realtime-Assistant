@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.1] - 2026-10-24
+
+### Changed
+- Published on PyPI as `aura-autonomous-agent` (PyPI rejected `aura-agent` as too similar to an existing project)
+- README rewritten around the PyPI package and library API
+- Package author metadata lists Abhishek Pandey
+
+---
+
 ## [0.2.0] - 2026-10-24
 
 ### Added
