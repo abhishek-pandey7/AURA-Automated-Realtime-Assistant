@@ -1,10 +1,9 @@
 import json
 import os
 from datetime import datetime
-from pathlib import Path
+from aura.config import AURA_HOME
 
-SESSIONS_DIR = Path.home() / ".aura" / "sessions"
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+SESSIONS_DIR = AURA_HOME / "sessions"
 
 
 class Memory:
@@ -47,6 +46,7 @@ class Memory:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _save(self):
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         path = SESSIONS_DIR / f"{self.session_id}.json"
         with open(path, "w") as f:
             json.dump({
